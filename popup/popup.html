@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOMLens</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-wrapper">
+        <img src="../assets/logo.svg" alt="DOMLens Logo" class="logo">
+        <div class="title-container">
+          <h1 class="title">DOMLens <span class="badge-ai">AI</span></h1>
+          <span class="version-tag">v1.0.0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Card -->
+    <main class="main-content">
+      <!-- Status Pill -->
+      <div class="status-card" id="statusCard">
+        <div class="status-indicator" id="statusIndicator"></div>
+        <div class="status-info">
+          <span class="status-label">Inspector Status</span>
+          <span class="status-text" id="statusText">Inactive</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions">
+        <button id="toggleBtn" class="btn btn-primary">
+          <span class="btn-icon">🔍</span>
+          <span id="btnText">Enable Inspector</span>
+        </button>
+      </div>
+
+      <!-- Quick Info / Keyboard Shortcuts -->
+      <div class="shortcuts-card">
+        <div class="shortcut-item">
+          <span class="shortcut-label">Toggle Inspector</span>
+          <kbd class="shortcut-key">Ctrl + Shift + I</kbd>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-label">Exit Inspect Mode</span>
+          <kbd class="shortcut-key">ESC</kbd>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <div class="footer-links">
+        <button id="docBtn" class="btn-link">
+          <span>📚 Documentation</span>
+        </button>
+        <button id="settingsBtn" class="btn-link">
+          <span>⚙️ Settings</span>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
