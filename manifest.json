@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "DOMLens",
+  "name": "Qursor++",
   "version": "1.0.0",
   "description": "Visual HTML element inspector, DOM analyzer, and DevTools assistant.",
   "permissions": [
