@@ -498,22 +498,37 @@ export class InspectorPanel {
             ${d.pageStyles || ''}
             <style>
               * { box-sizing: border-box; }
-              body {
+              html, body {
                 margin: 0 !important;
-                padding: 24px !important;
+                padding: 16px !important;
                 background: #0d1117 !important;
                 color: #c9d1d9;
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 justify-content: center;
-                min-height: 100vh;
+                min-height: 100%;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
               }
               .preview-wrapper {
-                width: 100%;
-                max-width: 100%;
-                display: flex;
-                justify-content: center;
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                display: block;
+                overflow-x: auto !important;
+              }
+              .preview-wrapper table {
+                width: 100% !important;
+                max-width: 100% !important;
+                table-layout: auto !important;
+              }
+              .preview-wrapper td, .preview-wrapper th {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+              }
+              .preview-wrapper img, .preview-wrapper svg {
+                max-width: 100% !important;
+                height: auto;
               }
               ${formattedComputedCss}
             </style>
