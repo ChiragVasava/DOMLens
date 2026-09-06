@@ -53,6 +53,7 @@ export function extractElementData(element) {
 
   // Element Specific Details
   const specialDetails = extractSpecializedDetails(element, tag);
+  const pageStyles = getPageStylesheets();
 
   return {
     tag: general.tagName,
@@ -70,8 +71,32 @@ export function extractElementData(element) {
     border: styles.border,
     flexGrid: styles.flexGrid,
     specialDetails,
-    rawCss
+    rawCss,
+    pageStyles,
+    baseUrl: window.location.href
   };
+}
+
+/**
+ * Collects webpage stylesheet content for accurate component preview rendering
+ * @returns {string}
+ */
+export function getPageStylesheets() {
+  const styles = [];
+
+  document.querySelectorAll('style').forEach(styleTag => {
+    if (styleTag.textContent && !styleTag.closest('#website-inspector-root')) {
+      styles.push(`<style>${styleTag.textContent}</style>`);
+    }
+  });
+
+  document.querySelectorAll('link[rel="stylesheet"]').forEach(linkTag => {
+    if (linkTag.href) {
+      styles.push(`<link rel="stylesheet" href="${linkTag.href}">`);
+    }
+  });
+
+  return styles.join('\n');
 }
 
 /**

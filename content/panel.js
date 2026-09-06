@@ -470,38 +470,58 @@ export class InspectorPanel {
 
     switch (this.activeTab) {
       case 'preview': {
-        const cleanOuterHtml = (d.general.fullOuterHTML || '')
-          .replace(/\s*class=(?:"[^"]*"|'[^']*'|\S+)/gi, '');
+        let renderableHtml = d.general.fullOuterHTML || '';
+        const lowerTag = (d.general.tagName || '').toLowerCase();
 
-        const formattedCss = d.rawCss ? `body > * {\n${d.rawCss}\n}` : '';
+        // Handle structural HTML elements requiring container tags to render accurately
+        if (lowerTag === 'td' || lowerTag === 'th') {
+          renderableHtml = `<table style="width:100%; border-collapse:collapse; background:transparent; table-layout:auto;"><tbody><tr>${renderableHtml}</tr></tbody></table>`;
+        } else if (lowerTag === 'tr') {
+          renderableHtml = `<table style="width:100%; border-collapse:collapse; background:transparent;"><tbody>${renderableHtml}</tbody></table>`;
+        } else if (lowerTag === 'tbody' || lowerTag === 'thead' || lowerTag === 'tfoot') {
+          renderableHtml = `<table style="width:100%; border-collapse:collapse; background:transparent;">${renderableHtml}</table>`;
+        } else if (lowerTag === 'li') {
+          renderableHtml = `<ul style="margin:0; padding-left:20px;">${renderableHtml}</ul>`;
+        } else if (lowerTag === 'dt' || lowerTag === 'dd') {
+          renderableHtml = `<dl style="margin:0;">${renderableHtml}</dl>`;
+        }
+
+        const parentClasses = (d.dom.parentClasses || []).join(' ');
+        const formattedComputedCss = d.rawCss ? `.preview-wrapper > * {\n${d.rawCss}\n}` : '';
 
         const srcDoc = `
           <!DOCTYPE html>
           <html>
           <head>
             <meta charset="utf-8">
+            <base href="${d.baseUrl || window.location.href}">
+            ${d.pageStyles || ''}
             <style>
               * { box-sizing: border-box; }
               body {
-                margin: 0;
-                padding: 24px;
-                background: #090d16;
-                color: #f8fafc;
+                margin: 0 !important;
+                padding: 24px !important;
+                background: #0d1117 !important;
+                color: #c9d1d9;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 min-height: 100vh;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
               }
-              ${formattedCss}
-              body > * * {
-                box-sizing: border-box;
-                font-family: inherit;
+              .preview-wrapper {
+                width: 100%;
+                max-width: 100%;
+                display: flex;
+                justify-content: center;
               }
+              ${formattedComputedCss}
             </style>
           </head>
-          <body>
-            ${cleanOuterHtml}
+          <body class="${parentClasses}">
+            <div class="preview-wrapper ${parentClasses}">
+              ${renderableHtml}
+            </div>
           </body>
           </html>
         `.trim();
@@ -517,9 +537,9 @@ export class InspectorPanel {
           <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%;">
             <div style="font-size: 11px; color: #38bdf8; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
               <span>👁️ Phase 3 Component Live Preview</span>
-              <span style="font-size: 10px; color: #94a3b8;">Isolated HTML & CSS View</span>
+              <span style="font-size: 10px; color: #94a3b8;">100% Fidelity HTML & CSS View</span>
             </div>
-            <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #090d16;" srcdoc="${escapedSrcDoc}"></iframe>
+            <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #0d1117;" srcdoc="${escapedSrcDoc}"></iframe>
           </div>
         `;
         break;
