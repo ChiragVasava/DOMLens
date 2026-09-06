@@ -23,6 +23,7 @@ export const INSPECTOR_STATE = {
 
 // UI Panel Tabs
 export const PANEL_TABS = [
+  { id: 'preview', label: 'Preview', icon: '👁️' },
   { id: 'general', label: 'General', icon: 'ⓘ' },
   { id: 'layout', label: 'Layout', icon: '📐' },
   { id: 'typography', label: 'Typography', icon: '🔤' },

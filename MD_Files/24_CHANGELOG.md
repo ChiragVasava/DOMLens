@@ -6,6 +6,19 @@ All notable changes to the **Qursor++ (DOMLens)** project will be documented in 
 
 ---
 
+## [1.1.0] - 2026-09-06 (Phase 3 Component Preview & Overlay Enhancements)
+
+### Added
+- **Phase 3 Component Live Preview Tab (`content/panel.js`)**:
+  - Added an isolated `Preview` tab (`👁️ Preview`) displaying a live rendered iframe of the target element containing ONLY its HTML and CSS.
+
+### Fixed
+- **Clean HTML View**: Stripped `class="..."` attribute strings from the `HTML` tab code block and copy actions to eliminate redundancy with `General` and `Attributes` tabs.
+- **Scroll-Locked Selection Rectangle (`content/overlay.js`)**: Updated `.selected-box` positioning to use document-absolute coordinates (`window.scrollY` / `window.scrollX`) and active `scroll`/`resize` listeners so the green selection rectangle stays attached to the element during page scrolling.
+- **Overlay Cleanup on Close (`content/inspector.js`)**: Added `onClose` callback and complete overlay destruction (`hideAll()`) when closing the panel (`✕` button) or exiting inspect mode.
+
+---
+
 ## [1.0.0] - 2026-09-05 (Phase 1 & Phase 2 Complete)
 
 ### Added

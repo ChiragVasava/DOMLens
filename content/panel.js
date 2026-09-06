@@ -13,11 +13,12 @@ export class InspectorPanel {
     this.shadowRoot = shadowRoot;
     this.panelContainer = null;
     this.currentData = null;
-    this.activeTab = 'general';
+    this.activeTab = 'preview';
     this.isCollapsed = false;
     this.isDragging = false;
     this.dragOffsetX = 0;
     this.dragOffsetY = 0;
+    this.onClose = null;
 
     this.createPanelDOM();
   }
@@ -305,7 +306,7 @@ export class InspectorPanel {
       <!-- Tabs Navigation -->
       <div class="panel-tabs" id="tabNav">
         ${PANEL_TABS.map(tab => `
-          <button class="tab-btn ${tab.id === 'general' ? 'active' : ''}" data-tab="${tab.id}">
+          <button class="tab-btn ${tab.id === 'preview' ? 'active' : ''}" data-tab="${tab.id}">
             <span>${tab.icon}</span> ${tab.label}
           </button>
         `).join('')}
@@ -419,10 +420,10 @@ export class InspectorPanel {
           content = JSON.stringify(this.currentData, null, 2);
           break;
         case 'html':
-          content = this.currentData.general.innerHTML;
+          content = (this.currentData.general.innerHTML || '').replace(/\s*class=(?:"[^"]*"|'[^']*'|\S+)/gi, '');
           break;
         case 'outerhtml':
-          content = this.currentData.general.fullOuterHTML;
+          content = (this.currentData.general.fullOuterHTML || '').replace(/\s*class=(?:"[^"]*"|'[^']*'|\S+)/gi, '');
           break;
         case 'selector':
           content = this.currentData.selector;
@@ -468,6 +469,56 @@ export class InspectorPanel {
     let html = '';
 
     switch (this.activeTab) {
+      case 'preview': {
+        const cleanOuterHtml = (d.general.fullOuterHTML || '')
+          .replace(/\s*class=(?:"[^"]*"|'[^']*'|\S+)/gi, '');
+
+        const srcDoc = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              * { box-sizing: border-box; }
+              body {
+                margin: 0;
+                padding: 24px;
+                background: #0f172a;
+                color: #f8fafc;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              }
+              ${d.rawCss || ''}
+            </style>
+          </head>
+          <body>
+            ${cleanOuterHtml}
+          </body>
+          </html>
+        `.trim();
+
+        const escapedSrcDoc = srcDoc
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+        html = `
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%;">
+            <div style="font-size: 11px; color: #38bdf8; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+              <span>👁️ Phase 3 Component Live Preview</span>
+              <span style="font-size: 10px; color: #94a3b8;">Isolated HTML & CSS View</span>
+            </div>
+            <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #0f172a;" srcdoc="${escapedSrcDoc}"></iframe>
+          </div>
+        `;
+        break;
+      }
+
       case 'general':
         html = `
           ${this.renderRow('Tag Name', d.general.tagName)}
@@ -538,9 +589,12 @@ export class InspectorPanel {
           : '<div class="data-row"><span class="data-label">Attributes</span><span class="data-value">No HTML attributes</span></div>';
         break;
 
-      case 'html':
-        html = `<div class="code-block">${this.escapeHtml(d.general.fullOuterHTML)}</div>`;
+      case 'html': {
+        const cleanOuterHtml = (d.general.fullOuterHTML || '')
+          .replace(/\s*class=(?:"[^"]*"|'[^']*'|\S+)/gi, '');
+        html = `<div class="code-block">${this.escapeHtml(cleanOuterHtml)}</div>`;
         break;
+      }
 
       case 'css':
         html = `<div class="code-block">${this.escapeHtml(d.rawCss)}</div>`;
@@ -573,5 +627,8 @@ export class InspectorPanel {
 
   hide() {
     if (this.panelContainer) this.panelContainer.style.display = 'none';
+    if (typeof this.onClose === 'function') {
+      this.onClose();
+    }
   }
 }

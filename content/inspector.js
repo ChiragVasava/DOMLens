@@ -33,6 +33,11 @@ class DOMLensEngine {
     this.overlay = new InspectorOverlay();
     this.panel = new InspectorPanel(this.overlay.shadowRoot);
 
+    // Register panel close callback to clear all overlays
+    this.panel.onClose = () => {
+      this.overlay.hideAll();
+    };
+
     // Listen to background service worker state change messages
     chrome.runtime.onMessage.addListener(this.handleMessage);
 
@@ -62,8 +67,9 @@ class DOMLensEngine {
 
   /**
    * Disables element inspect mode
+   * @param {boolean} [hideSelected=true] 
    */
-  disable() {
+  disable(hideSelected = true) {
     if (!this.isActive) return;
     this.isActive = false;
 
@@ -72,7 +78,13 @@ class DOMLensEngine {
     document.removeEventListener('keydown', this.handleKeyDown, true);
 
     document.body.style.cursor = '';
-    this.overlay.hideHover();
+    
+    if (hideSelected) {
+      this.overlay.hideAll();
+      this.panel.hide();
+    } else {
+      this.overlay.hideHover();
+    }
   }
 
   /**
@@ -120,8 +132,8 @@ class DOMLensEngine {
     const data = extractElementData(target);
     this.panel.updateData(data);
 
-    // Disable inspect mode after picking an element
-    this.disable();
+    // Disable inspect hover mode after picking an element (preserve selected box)
+    this.disable(false);
 
     // Inform background worker of state change
     chrome.runtime.sendMessage({ action: ACTIONS.TOGGLE_INSPECT });
@@ -133,7 +145,7 @@ class DOMLensEngine {
    */
   handleKeyDown(e) {
     if (e.key === 'Escape' || e.keyCode === 27) {
-      this.disable();
+      this.disable(true);
       chrome.runtime.sendMessage({ action: ACTIONS.TOGGLE_INSPECT });
     }
   }
@@ -146,7 +158,7 @@ class DOMLensEngine {
       if (message.active) {
         this.enable();
       } else {
-        this.disable();
+        this.disable(true);
       }
     }
   }

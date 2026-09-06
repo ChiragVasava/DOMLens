@@ -18,6 +18,10 @@ export class InspectorOverlay {
     this.selectedElement = null;
     this.rafId = null;
 
+    this.handleScrollResize = this.handleScrollResize.bind(this);
+    window.addEventListener('scroll', this.handleScrollResize, { passive: true });
+    window.addEventListener('resize', this.handleScrollResize, { passive: true });
+
     this.initShadowDom();
   }
 
@@ -61,6 +65,7 @@ export class InspectorOverlay {
       }
 
       .selected-box {
+        position: absolute;
         border: ${OVERLAY_STYLES.SELECTED_BORDER};
         background: ${OVERLAY_STYLES.SELECTED_BG};
         box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
@@ -107,6 +112,12 @@ export class InspectorOverlay {
     this.tooltip.className = 'inspector-tooltip';
     this.tooltip.style.display = 'none';
     this.shadowRoot.appendChild(this.tooltip);
+  }
+
+  handleScrollResize() {
+    if (this.selectedElement && this.selectedBox && this.selectedBox.style.display !== 'none') {
+      this.repositionSelectedBox();
+    }
   }
 
   /**
@@ -162,9 +173,20 @@ export class InspectorOverlay {
     }
 
     this.selectedElement = element;
-    const rect = element.getBoundingClientRect();
-    this.positionBox(this.selectedBox, rect);
     this.selectedBox.style.display = 'block';
+    this.repositionSelectedBox();
+  }
+
+  /**
+   * Repositions selected box using absolute document coordinates so it stays fixed to the element on scroll
+   */
+  repositionSelectedBox() {
+    if (!this.selectedElement) return;
+    const rect = this.selectedElement.getBoundingClientRect();
+    this.selectedBox.style.top = `${rect.top + window.scrollY}px`;
+    this.selectedBox.style.left = `${rect.left + window.scrollX}px`;
+    this.selectedBox.style.width = `${rect.width}px`;
+    this.selectedBox.style.height = `${rect.height}px`;
   }
 
   /**
