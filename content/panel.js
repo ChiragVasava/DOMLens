@@ -473,6 +473,8 @@ export class InspectorPanel {
         const cleanOuterHtml = (d.general.fullOuterHTML || '')
           .replace(/\s*class=(?:"[^"]*"|'[^']*'|\S+)/gi, '');
 
+        const formattedCss = d.rawCss ? `body > * {\n${d.rawCss}\n}` : '';
+
         const srcDoc = `
           <!DOCTYPE html>
           <html>
@@ -483,7 +485,7 @@ export class InspectorPanel {
               body {
                 margin: 0;
                 padding: 24px;
-                background: #0f172a;
+                background: #090d16;
                 color: #f8fafc;
                 display: flex;
                 align-items: center;
@@ -491,7 +493,11 @@ export class InspectorPanel {
                 min-height: 100vh;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
               }
-              ${d.rawCss || ''}
+              ${formattedCss}
+              body > * * {
+                box-sizing: border-box;
+                font-family: inherit;
+              }
             </style>
           </head>
           <body>
@@ -513,7 +519,7 @@ export class InspectorPanel {
               <span>👁️ Phase 3 Component Live Preview</span>
               <span style="font-size: 10px; color: #94a3b8;">Isolated HTML & CSS View</span>
             </div>
-            <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #0f172a;" srcdoc="${escapedSrcDoc}"></iframe>
+            <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #090d16;" srcdoc="${escapedSrcDoc}"></iframe>
           </div>
         `;
         break;

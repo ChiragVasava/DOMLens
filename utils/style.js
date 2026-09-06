@@ -113,16 +113,19 @@ export function getRawCssString(element) {
   if (!(element instanceof Element)) return '';
   const style = window.getComputedStyle(element);
   const importantProps = [
-    'display', 'position', 'top', 'left', 'width', 'height',
-    'margin', 'padding', 'font-family', 'font-size', 'font-weight',
-    'line-height', 'color', 'background-color', 'border', 'border-radius',
-    'box-shadow', 'flex-direction', 'justify-content', 'align-items', 'gap', 'z-index'
+    'display', 'position', 'width', 'height', 'min-width', 'min-height',
+    'margin', 'padding', 'box-sizing',
+    'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
+    'color', 'background-color', 'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+    'border-radius', 'box-shadow', 'outline', 'opacity', 'cursor',
+    'flex-direction', 'justify-content', 'align-items', 'flex-wrap', 'gap',
+    'grid-template-columns', 'grid-template-rows', 'z-index'
   ];
 
   return importantProps
     .map(prop => {
       const val = style.getPropertyValue(prop);
-      return val && val !== 'initial' && val !== 'normal' && val !== 'none' && val !== 'auto'
+      return val && val !== 'initial' && val !== 'normal' && val !== 'none' && val !== 'auto' && val !== '0px none rgb(248, 250, 252)'
         ? `  ${prop}: ${val};`
         : null;
     })
