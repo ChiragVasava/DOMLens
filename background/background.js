@@ -1,5 +1,5 @@
 /**
- * DOMLens - Background Service Worker
+ * Qursor++ - Background Service Worker
  * 
  * Manages extension state, handles command shortcuts, and orchestrates messaging
  * between Popup UI and Active Tab content scripts.
@@ -13,7 +13,7 @@ chrome.runtime.onInstalled.addListener(() => {
     inspectModeActive: false,
     version: '1.0.0'
   });
-  console.log('[DOMLens] Extension installed successfully.');
+  console.log('[Qursor++] Extension installed successfully.');
 });
 
 // Command listener (Ctrl+Shift+I / Cmd+Shift+I)
@@ -63,7 +63,7 @@ async function toggleTabInspectMode(tabId, sendResponse = null) {
       active: newState
     }).catch(async (err) => {
       // Content script may not be loaded yet; dynamically inject loader script
-      console.warn('[DOMLens] Direct message failed, injecting content loader script...', err);
+      console.warn('[Qursor++] Direct message failed, injecting content loader script...', err);
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
@@ -77,7 +77,7 @@ async function toggleTabInspectMode(tabId, sendResponse = null) {
           });
         }, 150);
       } catch (injectErr) {
-        console.error('[DOMLens] Injection failed:', injectErr);
+        console.error('[Qursor++] Injection failed:', injectErr);
       }
     });
 
@@ -85,7 +85,7 @@ async function toggleTabInspectMode(tabId, sendResponse = null) {
       sendResponse({ success: true, active: newState });
     }
   } catch (err) {
-    console.error('[DOMLens] Toggle state error:', err);
+    console.error('[Qursor++] Toggle state error:', err);
     if (sendResponse) sendResponse({ success: false, error: err.message });
   }
 }

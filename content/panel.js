@@ -1,5 +1,5 @@
 /**
- * DOMLens - Floating Information Panel UI
+ * Qursor++ - Floating Information Panel UI
  * 
  * Production-grade, movable, resizable, collapsible dark-theme floating panel.
  * Rendered inside Shadow DOM for total isolation from page styles.
@@ -19,6 +19,7 @@ export class InspectorPanel {
     this.dragOffsetX = 0;
     this.dragOffsetY = 0;
     this.onClose = null;
+    this.userZoomScale = null;
 
     this.createPanelDOM();
   }
@@ -294,7 +295,7 @@ export class InspectorPanel {
       <!-- Header -->
       <div class="panel-header" id="panelHeader">
         <div class="panel-title">
-          <span>🔍 DOMLens AI</span>
+          <span>🔍 Qursor++ AI</span>
           <span id="panelTagBadge" style="font-size: 10px; background: #334155; color: #38bdf8; padding: 2px 6px; border-radius: 4px;">SELECT AN ELEMENT</span>
         </div>
         <div class="header-actions">
@@ -406,6 +407,32 @@ export class InspectorPanel {
       this.renderTabContent();
     });
 
+    // Zoom Action Buttons in Preview Tab
+    this.panelContainer.addEventListener('click', (e) => {
+      const zoomBtn = e.target.closest('.zoom-action-btn');
+      if (!zoomBtn || !this.currentData) return;
+      e.stopPropagation();
+
+      const action = zoomBtn.dataset.zoomAction;
+      const targetWidth = this.currentData.widthPx && this.currentData.widthPx > 50 ? this.currentData.widthPx : 420;
+      const targetHeight = this.currentData.heightPx && this.currentData.heightPx > 50 ? this.currentData.heightPx : 300;
+      const autoScale = parseFloat(Math.min(430 / targetWidth, 310 / targetHeight, 1.0).toFixed(3));
+
+      let currentZoom = this.userZoomScale !== null ? this.userZoomScale : autoScale;
+
+      if (action === 'in') {
+        this.userZoomScale = parseFloat(Math.min(3.0, currentZoom + 0.1).toFixed(2));
+      } else if (action === 'out') {
+        this.userZoomScale = parseFloat(Math.max(0.15, currentZoom - 0.1).toFixed(2));
+      } else if (action === 'fit') {
+        this.userZoomScale = autoScale;
+      } else if (action === 'reset') {
+        this.userZoomScale = 1.0;
+      }
+
+      this.renderTabContent();
+    });
+
     // Copy Actions
     toolbar.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -449,6 +476,7 @@ export class InspectorPanel {
    */
   updateData(data) {
     this.currentData = data;
+    this.userZoomScale = null; // Reset zoom on new element selection
     if (!data) return;
 
     const badge = this.panelContainer.querySelector('#panelTagBadge');
@@ -482,10 +510,9 @@ export class InspectorPanel {
         const availHeight = 310;
 
         // Calculate scale ratio to fit target inside frame cleanly
-        const scaleX = availWidth / targetWidth;
-        const scaleY = availHeight / targetHeight;
-        const autoScale = Math.min(scaleX, scaleY, 1.0).toFixed(3);
-        const scalePercent = Math.round(autoScale * 100);
+        const autoScale = parseFloat(Math.min(availWidth / targetWidth, availHeight / targetHeight, 1.0).toFixed(3));
+        const activeZoom = this.userZoomScale !== null ? this.userZoomScale : autoScale;
+        const scalePercent = Math.round(activeZoom * 100);
 
         // Handle structural HTML elements requiring container tags to render accurately
         if (lowerTag === 'td' || lowerTag === 'th') {
@@ -533,7 +560,7 @@ export class InspectorPanel {
               .preview-target-box {
                 width: ${targetWidth}px !important;
                 min-width: ${targetWidth}px !important;
-                transform: scale(${autoScale});
+                transform: scale(${activeZoom});
                 transform-origin: top center;
                 box-sizing: border-box !important;
               }
@@ -565,9 +592,15 @@ export class InspectorPanel {
           <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%;">
             <div style="font-size: 11px; color: #38bdf8; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
               <span>👁️ Component Live Preview</span>
-              <span style="font-size: 10px; background: #1e293b; color: #10b981; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                📏 ${targetWidth}×${targetHeight}px ${autoScale < 1 ? `(Scaled ${scalePercent}%)` : ''}
-              </span>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <button class="zoom-action-btn" data-zoom-action="out" style="background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" title="Zoom Out">-</button>
+                <button class="zoom-action-btn" data-zoom-action="fit" style="background: #1e293b; color: #38bdf8; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" title="Fit Scale">Fit</button>
+                <button class="zoom-action-btn" data-zoom-action="reset" style="background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" title="100% Size">100%</button>
+                <button class="zoom-action-btn" data-zoom-action="in" style="background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" title="Zoom In">+</button>
+                <span style="font-size: 10px; background: #1e293b; color: #10b981; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3); margin-left: 4px;">
+                  📏 ${targetWidth}×${targetHeight}px (${scalePercent}%)
+                </span>
+              </div>
             </div>
             <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #0d1117;" srcdoc="${escapedSrcDoc}"></iframe>
           </div>

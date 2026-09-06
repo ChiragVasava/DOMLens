@@ -1,5 +1,5 @@
 /**
- * DOMLens - Popup Logic
+ * Qursor++ - Popup Logic
  * 
  * Synchronizes inspector state with background service worker and active tab.
  */
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Settings button click placeholder
   settingsBtn.addEventListener('click', () => {
-    alert('DOMLens Settings (Phase 2 feature coming soon)');
+    alert('Qursor++ Settings (Phase 2 feature coming soon)');
   });
 
   /**

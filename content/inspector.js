@@ -1,5 +1,5 @@
 /**
- * DOMLens - Main Content Script Orchestrator
+ * Qursor++ - Main Content Script Orchestrator
  * 
  * Coordinates mouse hover events, capture-phase element selection,
  * keyboard shortcut handlers, overlay highlights, and floating panel display.
@@ -10,7 +10,7 @@ import { extractElementData } from './extractor.js';
 import { InspectorOverlay } from './overlay.js';
 import { InspectorPanel } from './panel.js';
 
-class DOMLensEngine {
+class QursorEngine {
   constructor() {
     this.isActive = false;
     this.overlay = null;
@@ -48,7 +48,7 @@ class DOMLensEngine {
       }
     });
 
-    console.log('[DOMLens] Engine initialized.');
+    console.log('[Qursor++] Engine initialized.');
   }
 
   /**
@@ -96,7 +96,7 @@ class DOMLensEngine {
 
     const target = document.elementFromPoint(e.clientX, e.clientY);
     
-    // Ignore internal DOMLens host container
+    // Ignore internal inspector host container
     if (!target || target.closest('#website-inspector-root')) {
       this.overlay.hideHover();
       return;
@@ -115,7 +115,7 @@ class DOMLensEngine {
   handleClick(e) {
     if (!this.isActive) return;
 
-    // Ignore clicks inside DOMLens floating panel
+    // Ignore clicks inside floating panel
     if (e.target.closest && e.target.closest('#website-inspector-root')) {
       return;
     }
@@ -165,6 +165,6 @@ class DOMLensEngine {
 }
 
 // Singleton Engine instantiation
-if (!window.__domLensEngine) {
-  window.__domLensEngine = new DOMLensEngine();
+if (!window.__qursorEngine) {
+  window.__qursorEngine = new QursorEngine();
 }
