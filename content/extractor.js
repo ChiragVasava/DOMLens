@@ -54,6 +54,7 @@ export function extractElementData(element) {
   // Element Specific Details
   const specialDetails = extractSpecializedDetails(element, tag);
   const pageStyles = getPageStylesheets();
+  const rect = element.getBoundingClientRect();
 
   return {
     tag: general.tagName,
@@ -73,7 +74,9 @@ export function extractElementData(element) {
     specialDetails,
     rawCss,
     pageStyles,
-    baseUrl: window.location.href
+    baseUrl: window.location.href,
+    widthPx: Math.round(rect.width),
+    heightPx: Math.round(rect.height)
   };
 }
 

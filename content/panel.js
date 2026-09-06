@@ -473,13 +473,27 @@ export class InspectorPanel {
         let renderableHtml = d.general.fullOuterHTML || '';
         const lowerTag = (d.general.tagName || '').toLowerCase();
 
+        // Target element original dimensions from webpage
+        const targetWidth = d.widthPx && d.widthPx > 50 ? d.widthPx : 420;
+        const targetHeight = d.heightPx && d.heightPx > 50 ? d.heightPx : 300;
+
+        // Viewport bounds inside floating inspector panel preview frame
+        const availWidth = 430;
+        const availHeight = 310;
+
+        // Calculate scale ratio to fit target inside frame cleanly
+        const scaleX = availWidth / targetWidth;
+        const scaleY = availHeight / targetHeight;
+        const autoScale = Math.min(scaleX, scaleY, 1.0).toFixed(3);
+        const scalePercent = Math.round(autoScale * 100);
+
         // Handle structural HTML elements requiring container tags to render accurately
         if (lowerTag === 'td' || lowerTag === 'th') {
-          renderableHtml = `<table style="width:100%; border-collapse:collapse; background:transparent; table-layout:auto;"><tbody><tr>${renderableHtml}</tr></tbody></table>`;
+          renderableHtml = `<table style="width:${targetWidth}px; border-collapse:collapse; background:transparent; table-layout:fixed;"><tbody><tr>${renderableHtml}</tr></tbody></table>`;
         } else if (lowerTag === 'tr') {
-          renderableHtml = `<table style="width:100%; border-collapse:collapse; background:transparent;"><tbody>${renderableHtml}</tbody></table>`;
+          renderableHtml = `<table style="width:${targetWidth}px; border-collapse:collapse; background:transparent; table-layout:fixed;"><tbody>${renderableHtml}</tbody></table>`;
         } else if (lowerTag === 'tbody' || lowerTag === 'thead' || lowerTag === 'tfoot') {
-          renderableHtml = `<table style="width:100%; border-collapse:collapse; background:transparent;">${renderableHtml}</table>`;
+          renderableHtml = `<table style="width:${targetWidth}px; border-collapse:collapse; background:transparent; table-layout:fixed;">${renderableHtml}</table>`;
         } else if (lowerTag === 'li') {
           renderableHtml = `<ul style="margin:0; padding-left:20px;">${renderableHtml}</ul>`;
         } else if (lowerTag === 'dt' || lowerTag === 'dd') {
@@ -487,7 +501,7 @@ export class InspectorPanel {
         }
 
         const parentClasses = (d.dom.parentClasses || []).join(' ');
-        const formattedComputedCss = d.rawCss ? `.preview-wrapper > * {\n${d.rawCss}\n}` : '';
+        const formattedComputedCss = d.rawCss ? `.preview-target-box > * {\n${d.rawCss}\n}` : '';
 
         const srcDoc = `
           <!DOCTYPE html>
@@ -508,34 +522,33 @@ export class InspectorPanel {
                 justify-content: center;
                 min-height: 100%;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                overflow: auto;
               }
-              .preview-wrapper {
-                width: 100% !important;
-                max-width: 100% !important;
-                box-sizing: border-box !important;
-                display: block;
-                overflow-x: auto !important;
+              .preview-scale-viewport {
+                width: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
               }
-              .preview-wrapper table {
-                width: 100% !important;
-                max-width: 100% !important;
-                table-layout: auto !important;
-              }
-              .preview-wrapper td, .preview-wrapper th {
-                width: 100% !important;
-                max-width: 100% !important;
+              .preview-target-box {
+                width: ${targetWidth}px !important;
+                min-width: ${targetWidth}px !important;
+                transform: scale(${autoScale});
+                transform-origin: top center;
                 box-sizing: border-box !important;
               }
-              .preview-wrapper img, .preview-wrapper svg {
-                max-width: 100% !important;
+              .preview-target-box img, .preview-target-box svg {
+                max-width: 100%;
                 height: auto;
               }
               ${formattedComputedCss}
             </style>
           </head>
           <body class="${parentClasses}">
-            <div class="preview-wrapper ${parentClasses}">
-              ${renderableHtml}
+            <div class="preview-scale-viewport">
+              <div class="preview-target-box ${parentClasses}">
+                ${renderableHtml}
+              </div>
             </div>
           </body>
           </html>
@@ -551,8 +564,10 @@ export class InspectorPanel {
         html = `
           <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%;">
             <div style="font-size: 11px; color: #38bdf8; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
-              <span>👁️ Phase 3 Component Live Preview</span>
-              <span style="font-size: 10px; color: #94a3b8;">100% Fidelity HTML & CSS View</span>
+              <span>👁️ Component Live Preview</span>
+              <span style="font-size: 10px; background: #1e293b; color: #10b981; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                📏 ${targetWidth}×${targetHeight}px ${autoScale < 1 ? `(Scaled ${scalePercent}%)` : ''}
+              </span>
             </div>
             <iframe style="width: 100%; height: 340px; border: 1px solid #334155; border-radius: 8px; background: #0d1117;" srcdoc="${escapedSrcDoc}"></iframe>
           </div>
