@@ -24,15 +24,15 @@ export const INSPECTOR_STATE = {
 
 // Qursor++ Master Navigation Bar Tabs
 export const QURSOR_NAV_TABS = [
-  { id: 'preview', label: 'Live Preview', icon: '👁️' },
+  { id: 'live', label: 'Live', icon: '👁️' },
+  { id: 'overview', label: 'Overview', icon: 'ⓘ' },
   { id: 'typography', label: 'Typography', icon: 'T' },
   { id: 'colors', label: 'Colors', icon: '🎨' },
+  { id: 'layout', label: 'Layout', icon: '📐' },
+  { id: 'dom', label: 'DOM Tree', icon: '🌲' },
+  { id: 'code', label: 'Code', icon: '📄' },
+  { id: 'edit', label: 'Edit', icon: '💬' },
   { id: 'assets', label: 'Assets', icon: '🖼️' },
-  { id: 'edit', label: 'Edit & Annotate', icon: '💬' },
-  { id: 'layout', label: 'Layout & Spacing', icon: '📐' },
-  { id: 'dom', label: 'DOM & Hierarchy', icon: '🌲' },
-  { id: 'overview', label: 'Overview & A11y', icon: 'ⓘ' },
-  { id: 'code', label: 'Code Generator', icon: '📄' },
   { id: 'prompt', label: 'AI Prompt', icon: '👤' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];

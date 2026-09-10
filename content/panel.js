@@ -684,7 +684,8 @@ export class InspectorPanel {
 
     switch (this.activeTab) {
       // 1. Live Tab (Live Component Preview & Zoom Controls)
-      case 'live': {
+      case 'live':
+      case 'preview': {
         const targetWidth = d.widthPx && d.widthPx > 50 ? d.widthPx : 420;
         const targetHeight = d.heightPx && d.heightPx > 50 ? d.heightPx : 300;
         const autoScale = parseFloat(Math.min(390 / targetWidth, 240 / targetHeight, 1.0).toFixed(3));
@@ -747,12 +748,11 @@ export class InspectorPanel {
         break;
       }
 
-      // 2. Overview Tab (2nd Feature: Detailed Element Metrics)
+      // 2. Overview Tab
       case 'overview': {
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>ⓘ Detailed Overview & Metrics</span></div>`;
         const hexColor = colors.hexColor || rgbToHex(colors.color) || '#000000';
         const hexBg = colors.hexBgColor || rgbToHex(colors.backgroundColor) || '#FFFFFF';
-        const fontFam = (typography.fontFamily || 'system-ui').split(',')[0].replace(/['"]/g, '');
 
         body.innerHTML = `
           <div class="section-label-row">
@@ -760,7 +760,6 @@ export class InspectorPanel {
             <span class="node-badge">&lt;${d.tag || 'DIV'}&gt;</span>
           </div>
 
-          <!-- General Attributes Card -->
           <div class="qursor-card">
             <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">General Attributes</div>
             <div class="prop-grid">
@@ -773,53 +772,163 @@ export class InspectorPanel {
             </div>
           </div>
 
-          <!-- Typography & Colors Card -->
           <div class="qursor-card">
-            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Typography & Color Palette</div>
-            <div class="specimen-preview-box" style="font-family:${typography.fontFamily || 'sans-serif'}; font-size:${typography.fontSize || '16px'}; font-weight:${typography.fontWeight || '400'}; color:${hexColor}; background:${hexBg}; padding:10px; border-radius:6px; border:1px solid var(--q-border); margin-bottom:8px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-              ${escapeHtml(general.textContent ? general.textContent.substring(0, 40) : 'AaBbCcDdEeFfGg 12345')}
-            </div>
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Quick Styles & Colors</div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${escapeHtml(fontFam)}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${escapeHtml((typography.fontFamily || 'Inherit').split(',')[0].replace(/['"]/g, ''))}</span></div>
               <div class="prop-row"><span class="prop-label">Font Size / Weight</span><span class="prop-value">${typography.fontSize || '16px'} • ${typography.fontWeight || '400'}</span></div>
-              <div class="prop-row"><span class="prop-label">Line / Word Space</span><span class="prop-value">${typography.lineHeight || 'normal'} / ${typography.letterSpacing || 'normal'}</span></div>
-              <div class="prop-row"><span class="prop-label">Text Align / Transform</span><span class="prop-value">${typography.textAlign || 'left'} / ${typography.textTransform || 'none'}</span></div>
               <div class="prop-row"><span class="prop-label">Text Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hexColor}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hexColor}; border:1px solid rgba(128,128,128,0.3); display:inline-block; vertical-align:middle; margin-right:4px;"></span> ${hexColor} 📋</span></div>
               <div class="prop-row"><span class="prop-label">Background Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hexBg}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hexBg}; border:1px solid rgba(128,128,128,0.3); display:inline-block; vertical-align:middle; margin-right:4px;"></span> ${hexBg} 📋</span></div>
             </div>
           </div>
+        `;
+        break;
+      }
 
-          <!-- Layout & Spacing Box Model Card -->
+      // 3. Typography Tab
+      case 'typography': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>T Typography & Font Specimen</span></div>`;
+        const fontFam = (typography.fontFamily || 'system-ui').split(',')[0].replace(/['"]/g, '');
+        const hexColor = colors.hexColor || rgbToHex(colors.color) || '#000000';
+        const hexBg = colors.hexBgColor || rgbToHex(colors.backgroundColor) || '#FFFFFF';
+
+        body.innerHTML = `
+          <div class="section-label-row">
+            <span>FONT SPECIMEN & METRICS</span>
+            <span class="node-badge">&lt;${d.tag || 'DIV'}&gt;</span>
+          </div>
+
           <div class="qursor-card">
-            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Layout & Box Model Spacing</div>
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Live Specimen Render</div>
+            <div class="specimen-preview-box" style="font-family:${typography.fontFamily || 'sans-serif'}; font-size:18px; font-weight:${typography.fontWeight || '400'}; color:${hexColor}; background:${hexBg}; padding:14px; border-radius:6px; border:1px solid var(--q-border); margin-bottom:8px; text-align:center; overflow:hidden; text-overflow:ellipsis;">
+              ${escapeHtml(general.textContent ? general.textContent.substring(0, 60) : 'AaBbCcDdEeFfGgHhIiJj 1234567890')}
+            </div>
+            <div class="prop-grid">
+              <div class="prop-row"><span class="prop-label">Primary Font Family</span><span class="prop-value">${escapeHtml(fontFam)}</span></div>
+              <div class="prop-row"><span class="prop-label">Full Stack</span><span class="prop-value">${escapeHtml(typography.fontFamily || 'Inherit')}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Size</span><span class="prop-value">${typography.fontSize || '16px'}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Weight</span><span class="prop-value">${typography.fontWeight || '400'}</span></div>
+              <div class="prop-row"><span class="prop-label">Line Height</span><span class="prop-value">${typography.lineHeight || 'normal'}</span></div>
+              <div class="prop-row"><span class="prop-label">Letter Spacing</span><span class="prop-value">${typography.letterSpacing || 'normal'}</span></div>
+              <div class="prop-row"><span class="prop-label">Text Align</span><span class="prop-value">${typography.textAlign || 'left'}</span></div>
+              <div class="prop-row"><span class="prop-label">Text Transform</span><span class="prop-value">${typography.textTransform || 'none'}</span></div>
+              <div class="prop-row"><span class="prop-label">Text Decoration</span><span class="prop-value">${typography.textDecoration || 'none'}</span></div>
+              <div class="prop-row"><span class="prop-label">Word Spacing</span><span class="prop-value">${typography.wordSpacing || 'normal'}</span></div>
+            </div>
+          </div>
+        `;
+        break;
+      }
+
+      // 4. Colors Tab
+      case 'colors': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🎨 Color Palette & Swatches</span></div>`;
+        const hexColor = colors.hexColor || rgbToHex(colors.color) || '#000000';
+        const hexBg = colors.hexBgColor || rgbToHex(colors.backgroundColor) || '#FFFFFF';
+        const hexBorder = colors.hexBorderColor || rgbToHex(border.borderColor) || '#333333';
+
+        body.innerHTML = `
+          <div class="section-label-row">
+            <span>COLOR TELEMETRY & SWATCHES</span>
+            <span class="node-badge">&lt;${d.tag || 'DIV'}&gt;</span>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Text Color</div>
+            <div class="prop-row" style="align-items:center;">
+              <span style="width:20px; height:20px; border-radius:4px; background:${hexColor}; border:1px solid rgba(128,128,128,0.4); display:inline-block;"></span>
+              <span class="prop-value" style="font-family:monospace; font-size:11px; font-weight:700;">${hexColor} (${colors.color || 'Inherit'})</span>
+              <button class="icon-action-btn copy-action-trigger" data-copy-text="${hexColor}" title="Copy Hex">📋 Copy</button>
+            </div>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Background Color</div>
+            <div class="prop-row" style="align-items:center;">
+              <span style="width:20px; height:20px; border-radius:4px; background:${hexBg}; border:1px solid rgba(128,128,128,0.4); display:inline-block;"></span>
+              <span class="prop-value" style="font-family:monospace; font-size:11px; font-weight:700;">${hexBg} (${colors.backgroundColor || 'Transparent'})</span>
+              <button class="icon-action-btn copy-action-trigger" data-copy-text="${hexBg}" title="Copy Hex">📋 Copy</button>
+            </div>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Border & Shadow Palette</div>
+            <div class="prop-grid">
+              <div class="prop-row"><span class="prop-label">Border Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hexBorder}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hexBorder}; border:1px solid rgba(128,128,128,0.3); display:inline-block; vertical-align:middle; margin-right:4px;"></span> ${hexBorder} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">Box Shadow</span><span class="prop-value">${colors.boxShadow || 'none'}</span></div>
+              <div class="prop-row"><span class="prop-label">Opacity</span><span class="prop-value">${colors.opacity || '1.0'}</span></div>
+            </div>
+          </div>
+        `;
+        break;
+      }
+
+      // 5. Layout Tab
+      case 'layout': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>📐 Layout Architecture & Box Model</span></div>`;
+
+        body.innerHTML = `
+          <div class="section-label-row">
+            <span>BOX MODEL & SPACING DIAGRAM</span>
+            <span class="node-badge">${d.widthPx || 0}×${d.heightPx || 0}px</span>
+          </div>
+
+          <div class="qursor-card">
             <div class="spacing-diagram" style="margin-bottom:8px;">
-              <div class="margin-box" style="padding:6px; background:rgba(249, 115, 22, 0.1); border:1px dashed #f97316; border-radius:6px; font-size:9px; text-align:center; color:var(--q-text-primary);">
+              <div class="margin-box" style="padding:8px; background:rgba(249, 115, 22, 0.1); border:1px dashed #f97316; border-radius:6px; font-size:9px; text-align:center; color:var(--q-text-primary);">
                 <div style="font-weight:600; margin-bottom:4px;">MARGIN: ${spacing.margin || '0px'}</div>
-                <div class="padding-box" style="padding:6px; background:rgba(34, 197, 94, 0.1); border:1px dashed #22c55e; border-radius:4px;">
+                <div class="padding-box" style="padding:8px; background:rgba(34, 197, 94, 0.1); border:1px dashed #22c55e; border-radius:4px;">
                   <div style="font-weight:600; margin-bottom:4px;">PADDING: ${spacing.padding || '0px'}</div>
-                  <div class="element-box" style="padding:4px; background:var(--q-bg-surface-elevated); border:1px solid var(--q-border); border-radius:3px; font-weight:700;">
+                  <div class="element-box" style="padding:6px; background:var(--q-bg-surface-elevated); border:1px solid var(--q-border); border-radius:3px; font-weight:700;">
                     &lt;${d.tag || 'DIV'}&gt; ${d.widthPx || 0}×${d.heightPx || 0}px
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Layout Architecture & Flex/Grid</div>
             <div class="prop-grid">
               <div class="prop-row"><span class="prop-label">Display Mode</span><span class="prop-value">${layout.display || 'block'}</span></div>
-              <div class="prop-row"><span class="prop-label">Position / Z-Index</span><span class="prop-value">${layout.position || 'static'} (z: ${layout.zIndex || 'auto'})</span></div>
+              <div class="prop-row"><span class="prop-label">Position Mode</span><span class="prop-value">${layout.position || 'static'} (z-index: ${layout.zIndex || 'auto'})</span></div>
               <div class="prop-row"><span class="prop-label">Flex Direction</span><span class="prop-value">${flexGrid.flexDirection || 'N/A'}</span></div>
-              <div class="prop-row"><span class="prop-label">Flex Align / Justify</span><span class="prop-value">${flexGrid.alignItems || 'N/A'} / ${flexGrid.justifyContent || 'N/A'}</span></div>
-              <div class="prop-row"><span class="prop-label">Gap / Box Sizing</span><span class="prop-value">${spacing.gap || '0px'} / ${layout.boxSizing || 'border-box'}</span></div>
+              <div class="prop-row"><span class="prop-label">Justify Content</span><span class="prop-value">${flexGrid.justifyContent || 'N/A'}</span></div>
+              <div class="prop-row"><span class="prop-label">Align Items</span><span class="prop-value">${flexGrid.alignItems || 'N/A'}</span></div>
+              <div class="prop-row"><span class="prop-label">Gap</span><span class="prop-value">${spacing.gap || '0px'}</span></div>
+              <div class="prop-row"><span class="prop-label">Box Sizing</span><span class="prop-value">${layout.boxSizing || 'border-box'}</span></div>
+              <div class="prop-row"><span class="prop-label">Overflow</span><span class="prop-value">${layout.overflow || 'visible'}</span></div>
+            </div>
+          </div>
+        `;
+        break;
+      }
+
+      // 6. DOM Tree Tab
+      case 'dom': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🌲 DOM Tree Hierarchy & Selectors</span></div>`;
+
+        body.innerHTML = `
+          <div class="section-label-row">
+            <span>DOM HIERARCHY ANALYSIS</span>
+            <span class="node-badge">Level ${dom.depth || 1}</span>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">DOM Hierarchy Path</div>
+            <div style="font-family:monospace; font-size:10px; color:var(--q-accent); background:var(--q-bg-primary); padding:6px 8px; border-radius:4px; word-break:break-all;">
+              &lt;${dom.parentTag || 'html'}&gt; &gt; <span style="font-weight:700; color:var(--q-text-primary);">&lt;${d.tag || 'DIV'}&gt;</span>
             </div>
           </div>
 
-          <!-- DOM Tree & Hierarchy Card -->
           <div class="qursor-card">
-            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">DOM Hierarchy & Selectors</div>
+            <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Node Relationships</div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Parent Tag</span><span class="prop-value">&lt;${dom.parentTag || 'N/A'}&gt; ${dom.parentId ? '#' + escapeHtml(dom.parentId) : ''}</span></div>
+              <div class="prop-row"><span class="prop-label">Parent Element</span><span class="prop-value">&lt;${dom.parentTag || 'N/A'}&gt; ${dom.parentId ? '#' + escapeHtml(dom.parentId) : ''}</span></div>
               <div class="prop-row"><span class="prop-label">DOM Tree Depth</span><span class="prop-value">Level ${dom.depth || 1}</span></div>
-              <div class="prop-row"><span class="prop-label">Child Element Count</span><span class="prop-value">${dom.childrenCount || 0} nodes ${dom.childTags && dom.childTags.length ? '(' + escapeHtml(dom.childTags.join(', ')) + ')' : ''}</span></div>
-              <div class="prop-row"><span class="prop-label">Siblings (Prev / Next)</span><span class="prop-value">&lt;${dom.previousSiblingTag || 'None'}&gt; / &lt;${dom.nextSiblingTag || 'None'}&gt;</span></div>
+              <div class="prop-row"><span class="prop-label">Child Nodes</span><span class="prop-value">${dom.childrenCount || 0} nodes ${dom.childTags && dom.childTags.length ? '(' + escapeHtml(dom.childTags.join(', ')) + ')' : ''}</span></div>
+              <div class="prop-row"><span class="prop-label">Previous Sibling</span><span class="prop-value">&lt;${dom.previousSiblingTag || 'None'}&gt;</span></div>
+              <div class="prop-row"><span class="prop-label">Next Sibling</span><span class="prop-value">&lt;${dom.nextSiblingTag || 'None'}&gt;</span></div>
               <div class="prop-row"><span class="prop-label">CSS Selector</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.selector || '')}" style="cursor:pointer;">${escapeHtml(d.selector || 'N/A')} 📋</span></div>
               <div class="prop-row"><span class="prop-label">XPath</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.xpath || '')}" style="cursor:pointer;">${escapeHtml(d.xpath || 'N/A')} 📋</span></div>
             </div>
