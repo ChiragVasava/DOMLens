@@ -17,7 +17,7 @@ export const THEME_STORAGE_KEY = 'qursor_theme_preference';
  * Theme Design Tokens Definitions
  */
 export const DESIGN_TOKENS = `
-  :host, [data-theme="light"] {
+  :host, :host([data-theme="light"]), [data-theme="light"] {
     --q-bg-primary: #f5f5f7;
     --q-bg-surface: #ffffff;
     --q-bg-surface-elevated: #e8e8ed;
@@ -60,7 +60,7 @@ export const DESIGN_TOKENS = `
     --q-shadow-panel: 0 16px 40px -8px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
-  [data-theme="dark"] {
+  :host([data-theme="dark"]), [data-theme="dark"], .qursor-floating-panel[data-theme="dark"] {
     --q-bg-primary: #161618;
     --q-bg-surface: #242426;
     --q-bg-surface-elevated: #2c2c2e;
@@ -107,7 +107,7 @@ export const DESIGN_TOKENS = `
 export class ThemeManager {
   constructor(targetElement = null) {
     this.targetElement = targetElement;
-    this.currentTheme = THEMES.LIGHT;
+    this.currentTheme = THEMES.DARK;
     this.listeners = [];
   }
 
@@ -117,7 +117,7 @@ export class ThemeManager {
   async init() {
     return new Promise((resolve) => {
       chrome.storage.sync.get([THEME_STORAGE_KEY], (res) => {
-        const storedTheme = res[THEME_STORAGE_KEY] || THEMES.LIGHT;
+        const storedTheme = res[THEME_STORAGE_KEY] || THEMES.DARK;
         this.setTheme(storedTheme, false);
         resolve(this.currentTheme);
       });
@@ -132,6 +132,12 @@ export class ThemeManager {
   setTheme(theme, persist = true) {
     this.currentTheme = theme;
     const effectiveTheme = this.getEffectiveTheme(theme);
+
+    // Apply data-theme to shadow host
+    const rootHost = document.getElementById('website-inspector-root');
+    if (rootHost) {
+      rootHost.setAttribute('data-theme', effectiveTheme);
+    }
 
     if (this.targetElement) {
       if (this.targetElement.host) {
@@ -152,6 +158,30 @@ export class ThemeManager {
 
     this.notifyListeners(effectiveTheme);
   }
+
+  getEffectiveTheme(theme) {
+    if (theme === THEMES.SYSTEM) {
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? THEMES.DARK
+        : THEMES.LIGHT;
+    }
+    return theme === THEMES.DARK ? THEMES.DARK : THEMES.LIGHT;
+  }
+
+  toggleTheme() {
+    const nextTheme = this.getEffectiveTheme(this.currentTheme) === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
+    this.setTheme(nextTheme, true);
+    return nextTheme;
+  }
+
+  onChange(callback) {
+    this.listeners.push(callback);
+  }
+
+  notifyListeners(theme) {
+    this.listeners.forEach(cb => cb(theme));
+  }
+}
 
   getEffectiveTheme(theme) {
     if (theme === THEMES.SYSTEM) {
