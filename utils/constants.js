@@ -2,7 +2,7 @@
  * Qursor++ AI - Constants
  * 
  * Centralized constant definitions used across content scripts, background service worker, and popup.
- * Supports design system tokens and tab architecture.
+ * Supports the complete master feature suite inside the Qursor visual design system.
  */
 
 // Extension Action & Communication Keys
@@ -22,23 +22,22 @@ export const INSPECTOR_STATE = {
   SELECTED: 'SELECTED',
 };
 
-// UI Panel Tabs (12 Structured Developer-Focused Tabs)
-export const PANEL_TABS = [
-  { id: 'overview', label: 'Overview', icon: 'ⓘ' },
-  { id: 'styles', label: 'Styles', icon: '🎨' },
-  { id: 'layout', label: 'Layout', icon: '📐' },
-  { id: 'typography', label: 'Typography', icon: '🔤' },
-  { id: 'colors', label: 'Colors', icon: '💧' },
-  { id: 'spacing', label: 'Spacing', icon: '📏' },
-  { id: 'border', label: 'Border', icon: '🔲' },
-  { id: 'flex', label: 'Flex & Grid', icon: '▦' },
-  { id: 'dom', label: 'DOM', icon: '🌲' },
-  { id: 'accessibility', label: 'A11y', icon: '♿' },
-  { id: 'component', label: 'Component', icon: '⚛️' },
-  { id: 'prompt', label: 'AI Prompt', icon: '✨' },
+// Qursor++ Master Navigation Bar Tabs
+export const QURSOR_NAV_TABS = [
+  { id: 'preview', label: 'Live Preview', icon: '👁️' },
+  { id: 'typography', label: 'Typography', icon: 'T' },
+  { id: 'colors', label: 'Colors', icon: '🎨' },
+  { id: 'assets', label: 'Assets', icon: '🖼️' },
+  { id: 'edit', label: 'Edit & Annotate', icon: '💬' },
+  { id: 'layout', label: 'Layout & Spacing', icon: '📐' },
+  { id: 'dom', label: 'DOM & Hierarchy', icon: '🌲' },
+  { id: 'overview', label: 'Overview & A11y', icon: 'ⓘ' },
+  { id: 'code', label: 'Code Generator', icon: '📄' },
+  { id: 'prompt', label: 'AI Prompt', icon: '👤' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 
-// Highlight Theme Styling Constants (Uses Design Tokens in Overlay CSS)
+// Highlight Theme Styling Constants
 export const OVERLAY_STYLES = {
   Z_INDEX: 2147483646,
 };
