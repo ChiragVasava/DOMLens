@@ -1,8 +1,8 @@
 /**
- * Qursor++ - Theme & Design Token Manager (Exact Qursor Replica)
+ * Qursor++ - Theme & Design Token Manager (100% Synchronized Theme Engine)
  * 
- * Manages Dark, Light, and System themes using CSS Custom Properties (Design Tokens)
- * matching the Qursor floating UI design system.
+ * Centralized Theme Manager handling Dark, Light, and System themes using CSS Custom Properties.
+ * Persists theme preference in chrome.storage.sync and syncs in real-time across Popup and Floating Inspector Panel.
  */
 
 export const THEMES = {
@@ -107,12 +107,12 @@ export const DESIGN_TOKENS = `
 export class ThemeManager {
   constructor(targetElement = null) {
     this.targetElement = targetElement;
-    this.currentTheme = THEMES.LIGHT; // Default Light mode matching Qursor screenshots
+    this.currentTheme = THEMES.LIGHT;
     this.listeners = [];
   }
 
   /**
-   * Initializes theme from storage or system preference
+   * Initializes theme from chrome.storage.sync
    */
   async init() {
     return new Promise((resolve) => {
@@ -125,7 +125,7 @@ export class ThemeManager {
   }
 
   /**
-   * Sets current active theme
+   * Sets current theme mode across target container, host element, and chrome storage
    * @param {string} theme 'dark' | 'light' | 'system'
    * @param {boolean} persist 
    */
@@ -136,7 +136,12 @@ export class ThemeManager {
     if (this.targetElement) {
       if (this.targetElement.host) {
         this.targetElement.host.setAttribute('data-theme', effectiveTheme);
-      } else if (this.targetElement.setAttribute) {
+      }
+      if (this.targetElement.querySelector) {
+        const panel = this.targetElement.querySelector('.qursor-floating-panel');
+        if (panel) panel.setAttribute('data-theme', effectiveTheme);
+      }
+      if (this.targetElement.setAttribute) {
         this.targetElement.setAttribute('data-theme', effectiveTheme);
       }
     }

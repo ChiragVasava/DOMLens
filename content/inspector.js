@@ -130,7 +130,7 @@ class QursorEngine {
     // Highlight selected element & update panel data
     this.overlay.updateSelected(target);
     const data = extractElementData(target);
-    this.panel.updateData(data);
+    this.panel.updateData(data, target);
 
     // Disable inspect hover mode after picking an element (preserve selected box)
     this.disable(false);

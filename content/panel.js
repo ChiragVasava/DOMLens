@@ -1,32 +1,59 @@
 /**
- * Qursor++ - Floating Information Panel UI (Master Feature Suite + Qursor Visual Replica)
+ * Qursor++ - Floating Information Panel UI (Master Stabilized Implementation)
  * 
- * Replicates the exact Qursor visual design (floating card, rounded corners, monochrome header toolbar,
- * blue selection badge, specimen cards) while hosting the complete Qursor++ feature suite:
- * Live Component Preview with Zoom (-/Fit/100%/+), 11 inspection sections, multi-framework synthesizer,
- * AI prompt generator, toasts, and theme persistence.
+ * Production-grade floating panel containing all 7 ordered feature tabs:
+ * 1. Live (Live Component Preview & Zoom Controls)
+ * 2. Overview (Detailed Element Metrics & Telemetry)
+ * 3. Code (HTML Only, CSS Only, JS Only, HTML+CSS+JS, React, Vue, Angular, Tailwind)
+ * 4. Edit (Natural Language Instruction Parser & Interactive Style Editor)
+ * 5. Assets (Full Subtree Scanner with All / By Type Filtering & YouTube Thumbnails)
+ * 6. Prompt (Structured AI Prompt Builder for LLM Coding Agents)
+ * 7. Settings (Theme Switcher & Extension Preferences)
  */
 
-import { QURSOR_NAV_TABS } from '../utils/constants.js';
 import { copyToClipboard } from '../utils/clipboard.js';
 import { DESIGN_TOKENS, ThemeManager, THEMES } from '../utils/theme.js';
 import { ToastManager } from '../utils/toast.js';
-import { generateComponentCode, FRAMEWORKS } from '../utils/component_generator.js';
+import { generateComponentCode, CODE_FORMATS } from '../utils/component_generator.js';
 import { generateStructuredAiPrompt } from '../utils/prompt_generator.js';
+import { extractElementAssets, filterAssets } from '../utils/asset_extractor.js';
+import { StyleEditor } from '../utils/style_editor.js';
+
+export const QURSOR_NAV_TABS = [
+  { id: 'live', label: 'Live', icon: '👁️' },
+  { id: 'overview', label: 'Overview', icon: 'ⓘ' },
+  { id: 'code', label: 'Code', icon: '📄' },
+  { id: 'edit', label: 'Edit', icon: '💬' },
+  { id: 'assets', label: 'Assets', icon: '🖼️' },
+  { id: 'prompt', label: 'Prompt', icon: '👤' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' },
+];
 
 export class InspectorPanel {
   constructor(shadowRoot) {
     this.shadowRoot = shadowRoot;
     this.panelContainer = null;
     this.currentData = null;
-    this.activeTab = 'preview'; // Default to Live Preview
+    this.targetElement = null;
+    this.activeTab = 'live'; // 1. Live as 1st Feature
     this.userZoomScale = null;
-    this.codeFramework = FRAMEWORKS.REACT;
-    this.codeScope = 'Selected';
-    this.codeStyles = 'Computed';
-    this.assetSegment = 'By Type';
+    
+    // Code tab state
+    this.codeFormat = CODE_FORMATS.HTML_CSS_JS;
+    this.codeScope = 'Selected'; // 'Selected' | 'Full Page'
+    this.codeStyles = 'Computed'; // 'Computed' | 'Classes'
+
+    // Assets tab state
+    this.assetFilter = 'All'; // 'All' | 'Images' | 'SVG' | 'PNG' | 'JPG' | 'WEBP' | 'GIF' | 'Other'
+
+    // Edit tab state
+    this.styleEditor = new StyleEditor();
+    this.editInstructionText = '';
+
+    // Prompt tab state
     this.promptFrameworkTarget = 'React';
     this.editedPromptText = null;
+
     this.isDragging = false;
     this.dragOffsetX = 0;
     this.dragOffsetY = 0;
@@ -65,7 +92,7 @@ export class InspectorPanel {
         pointer-events: auto !important;
         resize: both;
         min-width: 360px;
-        max-width: 540px;
+        max-width: 560px;
         backdrop-filter: blur(20px);
         transition: background 0.2s, border-color 0.2s;
       }
@@ -88,7 +115,6 @@ export class InspectorPanel {
         gap: 4px;
         overflow-x: auto;
       }
-
       .navbar-icons-group::-webkit-scrollbar { height: 0; }
 
       .nav-icon-btn {
@@ -173,6 +199,7 @@ export class InspectorPanel {
         padding: 2px;
         gap: 2px;
         width: 100%;
+        overflow-x: auto;
       }
 
       .segment-btn {
@@ -186,6 +213,7 @@ export class InspectorPanel {
         color: var(--q-text-muted);
         cursor: pointer;
         text-align: center;
+        white-space: nowrap;
         transition: all 0.15s;
       }
 
@@ -253,16 +281,6 @@ export class InspectorPanel {
         gap: 8px;
       }
 
-      /* Specimen Text Box */
-      .specimen-preview-box {
-        font-size: 18px;
-        line-height: 1.3;
-        color: var(--q-text-primary);
-        word-break: break-all;
-        padding: 8px 0;
-        user-select: text;
-      }
-
       /* Grid Property Table */
       .prop-grid {
         display: flex;
@@ -280,27 +298,36 @@ export class InspectorPanel {
       .prop-label { color: var(--q-text-muted); font-weight: 500; }
       .prop-value { color: var(--q-text-primary); font-weight: 600; font-family: SFMono-Regular, Consolas, monospace; display: flex; align-items: center; gap: 4px; }
 
-      .contrast-badge {
-        background: var(--q-success-bg, rgba(52, 199, 89, 0.12));
-        color: var(--q-success, #34c759);
-        border-radius: 4px;
-        padding: 2px 6px;
-        font-size: 10px;
-        font-weight: 700;
+      /* Checkerboard Asset Box */
+      .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
       }
 
-      /* Checkerboard Asset Box */
+      .asset-card-item {
+        background: var(--q-bg-surface);
+        border: 1px solid var(--q-border);
+        border-radius: 8px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        align-items: center;
+      }
+
       .asset-preview-card {
         background-color: #ffffff;
         background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
-        background-size: 16px 16px;
-        background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
-        border-radius: 8px;
-        height: 90px;
+        background-size: 14px 14px;
+        border-radius: 6px;
+        width: 100%;
+        height: 75px;
         display: flex;
         align-items: center;
         justify-content: center;
         border: 1px solid var(--q-border);
+        overflow: hidden;
       }
 
       /* Spacing Diagram */
@@ -308,7 +335,7 @@ export class InspectorPanel {
         background: var(--q-bg-primary);
         border: 1px dashed var(--q-border);
         border-radius: 8px;
-        padding: 12px;
+        padding: 10px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -321,7 +348,7 @@ export class InspectorPanel {
       .margin-box {
         border: 1px dashed #ff9500;
         background: rgba(255, 149, 0, 0.08);
-        padding: 10px;
+        padding: 8px;
         border-radius: 6px;
         width: 85%;
         text-align: center;
@@ -330,7 +357,7 @@ export class InspectorPanel {
       .padding-box {
         border: 1px dashed #2563eb;
         background: rgba(37, 99, 235, 0.08);
-        padding: 8px;
+        padding: 6px;
         border-radius: 4px;
         text-align: center;
       }
@@ -338,7 +365,7 @@ export class InspectorPanel {
       .element-box {
         border: 1px solid #34c759;
         background: rgba(52, 199, 89, 0.15);
-        padding: 6px;
+        padding: 4px;
         border-radius: 3px;
         color: #34c759;
         font-weight: bold;
@@ -349,8 +376,8 @@ export class InspectorPanel {
         border: none;
         color: var(--q-text-muted);
         cursor: pointer;
-        padding: 4px;
-        font-size: 13px;
+        padding: 3px 6px;
+        font-size: 11px;
         border-radius: 4px;
       }
       .icon-action-btn:hover { color: var(--q-text-primary); background: var(--q-bg-hover); }
@@ -386,7 +413,7 @@ export class InspectorPanel {
           ${QURSOR_NAV_TABS.map(tab => `
             <button class="nav-icon-btn ${tab.id === this.activeTab ? 'active' : ''}" data-tab="${tab.id}" title="${tab.label}">
               <span>${tab.icon}</span>
-              <span>${tab.label.split(' ')[0]}</span>
+              <span>${tab.label}</span>
             </button>
           `).join('')}
         </div>
@@ -485,9 +512,10 @@ export class InspectorPanel {
       if (segBtn) {
         const segGroup = segBtn.dataset.segGroup;
         const value = segBtn.dataset.segValue;
+        if (segGroup === 'codeFormat') this.codeFormat = value;
         if (segGroup === 'codeScope') this.codeScope = value;
         if (segGroup === 'codeStyles') this.codeStyles = value;
-        if (segGroup === 'assetSegment') this.assetSegment = value;
+        if (segGroup === 'assetFilter') this.assetFilter = value;
         this.renderTabContent();
       }
 
@@ -500,11 +528,31 @@ export class InspectorPanel {
 
         let currentZoom = this.userZoomScale !== null ? this.userZoomScale : autoScale;
 
-        if (action === 'in') this.userZoomScale = parseFloat(Math.min(3.0, currentZoom + 0.1).toFixed(2));
-        else if (action === 'out') this.userZoomScale = parseFloat(Math.max(0.15, currentZoom - 0.1).toFixed(2));
+        if (action === 'in') this.userZoomScale = parseFloat(Math.min(3.0, currentZoom + 0.15).toFixed(2));
+        else if (action === 'out') this.userZoomScale = parseFloat(Math.max(0.15, currentZoom - 0.15).toFixed(2));
         else if (action === 'fit') this.userZoomScale = autoScale;
         else if (action === 'reset') this.userZoomScale = 1.0;
 
+        this.renderTabContent();
+      }
+
+      // Edit Instruction Apply Button
+      if (e.target.closest('#applyEditBtn') && this.currentData) {
+        const textarea = body.querySelector('#editInstructionArea');
+        if (textarea && textarea.value) {
+          this.editInstructionText = textarea.value;
+          this.styleEditor.parseAndApplyInstruction(textarea.value);
+          this.currentData.rawCss = this.styleEditor.applyToRawCss(this.currentData.rawCss);
+          this.toastManager.show('✓ Applied style edits to preview!', 'success');
+          this.renderTabContent();
+        }
+      }
+
+      // Edit Reset Button
+      if (e.target.closest('#resetEditBtn')) {
+        this.styleEditor.reset();
+        this.editInstructionText = '';
+        this.toastManager.show('Reset edits', 'info');
         this.renderTabContent();
       }
 
@@ -517,24 +565,30 @@ export class InspectorPanel {
       }
 
       if (downloadBtn && this.currentData) {
-        const content = generateComponentCode(this.currentData, this.codeFramework);
-        const ext = this.codeFramework === FRAMEWORKS.REACT ? 'jsx' : (this.codeFramework === FRAMEWORKS.VUE ? 'vue' : 'html');
-        this.downloadFile(content, `${this.currentData.tag.toLowerCase()}_component.${ext}`);
-        this.toastManager.show(`✓ Downloaded component.${ext}`, 'success');
+        const content = generateComponentCode(this.currentData, this.codeFormat);
+        const ext = this.codeFormat === CODE_FORMATS.REACT ? 'jsx' : (this.codeFormat === CODE_FORMATS.VUE ? 'vue' : (this.codeFormat === CODE_FORMATS.CSS_ONLY ? 'css' : 'html'));
+        this.downloadFile(content, `${this.currentData.tag.toLowerCase()}_export.${ext}`);
+        this.toastManager.show(`✓ Downloaded ${this.currentData.tag.toLowerCase()}_export.${ext}`, 'success');
       }
     });
 
-    body.addEventListener('change', (e) => {
-      if (e.target.classList.contains('framework-select')) {
-        this.codeFramework = e.target.value;
-        this.renderTabContent();
+    body.addEventListener('input', (e) => {
+      if (e.target.classList.contains('edit-prop-input')) {
+        const prop = e.target.dataset.styleProp;
+        const val = e.target.value;
+        if (prop && val) {
+          this.styleEditor.setStyle(prop, val);
+          this.currentData.rawCss = this.styleEditor.applyToRawCss(this.currentData.rawCss);
+        }
       }
     });
   }
 
-  updateData(data) {
+  updateData(data, element = null) {
     this.currentData = data;
-    this.userZoomScale = null; // Reset zoom on new element pick
+    this.targetElement = element;
+    this.userZoomScale = null;
+    this.styleEditor.reset();
     this.editedPromptText = null;
     if (!data) return;
     this.show();
@@ -552,7 +606,7 @@ export class InspectorPanel {
         <div style="text-align:center; padding:32px 16px; color:var(--q-text-muted);">
           <div style="font-size:32px;">🎯</div>
           <div style="font-weight:700; margin-top:8px; color:var(--q-text-primary);">No Element Selected</div>
-          <div style="font-size:11px; margin-top:4px;">Click any element to inspect live preview, typography, colors, code, or prompts.</div>
+          <div style="font-size:11px; margin-top:4px;">Click any element to inspect live preview, overview, code, edits, assets, or prompts.</div>
         </div>
       `;
       return;
@@ -561,7 +615,8 @@ export class InspectorPanel {
     const d = this.currentData;
 
     switch (this.activeTab) {
-      case 'preview': {
+      // 1. Live Tab (Live Component Preview & Zoom)
+      case 'live': {
         const targetWidth = d.widthPx && d.widthPx > 50 ? d.widthPx : 420;
         const targetHeight = d.heightPx && d.heightPx > 50 ? d.heightPx : 300;
         const autoScale = parseFloat(Math.min(390 / targetWidth, 240 / targetHeight, 1.0).toFixed(3));
@@ -624,132 +679,45 @@ export class InspectorPanel {
         break;
       }
 
-      case 'typography': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>Aa</span> <span>Pick font</span></div>`;
-        body.innerHTML = `
-          <div class="section-label-row">
-            <span>TYPOGRAPHY METRICS</span>
-            <span class="node-badge">1</span>
-          </div>
-
-          <div class="qursor-card">
-            <div style="font-weight:700; font-size:13px;">${d.tag.charAt(0) + d.tag.slice(1).toLowerCase()}</div>
-            <div class="specimen-preview-box" style="font-family:${d.typography.fontFamily}; font-size:18px; font-weight:${d.typography.fontWeight}; line-height:${d.typography.lineHeight};">
-              AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz
-            </div>
-
-            <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Font family</span><span class="prop-value">${d.typography.fontFamily.split(',')[0].replace(/['"]/g, '')}</span></div>
-              <div class="prop-row"><span class="prop-label">Font size</span><span class="prop-value">${d.typography.fontSize}</span></div>
-              <div class="prop-row">
-                <span class="prop-label">Text color</span>
-                <span class="prop-value copy-action-trigger" data-copy-text="${d.colors.color}" style="cursor:pointer;">
-                  <span style="width:10px; height:10px; border-radius:2px; background:${d.colors.color}; display:inline-block;"></span>
-                  ${rgbToHex(d.colors.color) || d.colors.color} 📋
-                </span>
-              </div>
-              <div class="prop-row"><span class="prop-label">Weight</span><span class="prop-value">${d.typography.fontWeight}</span></div>
-              <div class="prop-row"><span class="prop-label">Line height</span><span class="prop-value">${d.typography.lineHeight}</span></div>
-              <div class="prop-row"><span class="prop-label">Letter spacing</span><span class="prop-value">${d.typography.letterSpacing}</span></div>
-              <div class="prop-row"><span class="prop-label">Contrast</span><span class="contrast-badge">• Good 6.33:1</span></div>
-            </div>
-          </div>
-        `;
-        break;
-      }
-
-      case 'colors': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🎨</span> <span>Pick color</span></div>`;
+      // 2. Overview Tab (2nd Feature: Detailed Element Metrics)
+      case 'overview': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>ⓘ Detailed Overview & Metrics</span></div>`;
         const hex = rgbToHex(d.colors.color) || '#000000';
         const bgHex = rgbToHex(d.colors.backgroundColor) || '#FFFFFF';
 
         body.innerHTML = `
           <div class="section-label-row">
-            <span>COLOR PALETTE & FORMATS</span>
-            <span class="node-badge">1</span>
+            <span>ELEMENT SUMMARY</span>
+            <span class="node-badge">&lt;${d.tag}&gt;</span>
           </div>
 
+          <!-- General Attributes -->
           <div class="qursor-card">
-            <div class="prop-row">
-              <span style="display:flex; align-items:center; gap:6px; font-weight:700;">
-                <span style="width:12px; height:12px; border-radius:2px; background:${hex}; display:inline-block;"></span> text color
-              </span>
-              <span class="prop-value copy-action-trigger" data-copy-text="${hex}">${hex} 📋</span>
-            </div>
-            <div class="prop-grid" style="margin-top:6px;">
-              <div class="prop-row"><span class="prop-label">HEX</span><span class="prop-value copy-action-trigger" data-copy-text="${hex}">${hex} 📋</span></div>
-              <div class="prop-row"><span class="prop-label">RGB</span><span class="prop-value copy-action-trigger" data-copy-text="${d.colors.color}">${d.colors.color} 📋</span></div>
+            <div class="prop-grid">
+              <div class="prop-row"><span class="prop-label">Tag Name</span><span class="prop-value">&lt;${d.general.tagName}&gt;</span></div>
+              <div class="prop-row"><span class="prop-label">Element ID</span><span class="prop-value">${d.general.id}</span></div>
+              <div class="prop-row"><span class="prop-label">CSS Classes</span><span class="prop-value">${d.classes.length ? d.classes.join(', ') : 'None'}</span></div>
+              <div class="prop-row"><span class="prop-label">ARIA Role</span><span class="prop-value">${d.general.role}</span></div>
+              <div class="prop-row"><span class="prop-label">Accessible Name</span><span class="prop-value">${d.general.accessibleName || 'N/A'}</span></div>
+              <div class="prop-row"><span class="prop-label">Value / Input</span><span class="prop-value">${d.general.value}</span></div>
             </div>
           </div>
 
+          <!-- Typography & Color Specimen Card -->
           <div class="qursor-card">
-            <div class="prop-row">
-              <span style="display:flex; align-items:center; gap:6px; font-weight:700;">
-                <span style="width:12px; height:12px; border-radius:2px; background:${bgHex}; display:inline-block;"></span> background
-              </span>
-              <span class="prop-value copy-action-trigger" data-copy-text="${bgHex}">${bgHex} 📋</span>
+            <div style="font-weight:700; font-size:12px;">Typography & Color Specimen</div>
+            <div class="specimen-preview-box" style="font-family:${d.typography.fontFamily}; font-size:16px; font-weight:${d.typography.fontWeight}; color:${d.colors.color};">
+              AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz
+            </div>
+            <div class="prop-grid">
+              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${d.typography.fontFamily.split(',')[0].replace(/['"]/g, '')}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Size</span><span class="prop-value">${d.typography.fontSize}</span></div>
+              <div class="prop-row"><span class="prop-label">Text Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hex}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hex}; display:inline-block;"></span> ${hex} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">Background</span><span class="prop-value copy-action-trigger" data-copy-text="${bgHex}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${bgHex}; display:inline-block;"></span> ${bgHex} 📋</span></div>
             </div>
           </div>
-        `;
-        break;
-      }
 
-      case 'assets': {
-        triggerBar.innerHTML = `
-          <div class="segment-pill-container">
-            <button class="segment-btn ${this.assetSegment === 'By Type' ? 'active' : ''}" data-seg-group="assetSegment" data-seg-value="By Type">By Type</button>
-            <button class="segment-btn ${this.assetSegment === 'All' ? 'active' : ''}" data-seg-group="assetSegment" data-seg-value="All">All</button>
-          </div>
-        `;
-
-        body.innerHTML = `
-          <div class="section-label-row">
-            <span>ASSET EXTRACTION</span>
-            <span class="node-badge">1</span>
-          </div>
-
-          <div class="qursor-card">
-            <div class="asset-preview-card">
-              ${d.specialDetails.type === 'IMAGE' 
-                ? `<img src="${d.specialDetails.imageUrl}" style="max-height:75px; max-width:80%; object-fit:contain;" />` 
-                : `<span style="font-size:32px;">✉️</span>`}
-            </div>
-            <div class="prop-row" style="font-size:10px; color:var(--q-text-muted);">
-              <span>SVG • ${d.general.fullOuterHTML ? d.general.fullOuterHTML.length : 120} B • ${d.widthPx}×${d.heightPx}</span>
-              <div style="display:flex; gap:4px;">
-                <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(d.general.fullOuterHTML)}" title="Copy SVG">📋</button>
-                <button class="icon-action-btn download-action-trigger" title="Download Asset">↓</button>
-              </div>
-            </div>
-          </div>
-        `;
-        break;
-      }
-
-      case 'edit': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>▾ link: "${d.tag.toLowerCase()}"</span></div>`;
-        body.innerHTML = `
-          <div class="qursor-card">
-            <div class="prop-row"><span class="prop-label">color:</span><input type="text" style="width:100px; text-align:right;" value="${rgbToHex(d.colors.color) || '#ffffff'}" /></div>
-            <div class="prop-row"><span class="prop-label">background-color:</span><input type="text" style="width:100px; text-align:right;" value="${rgbToHex(d.colors.backgroundColor) || '#000000'}" /></div>
-            <div class="prop-row"><span class="prop-label">font-size:</span><input type="text" style="width:100px; text-align:right;" value="${d.typography.fontSize}" /></div>
-            <div class="prop-row"><span class="prop-label">font-weight:</span><input type="text" style="width:100px; text-align:right;" value="${d.typography.fontWeight}" /></div>
-          </div>
-
-          <div class="qursor-card">
-            <textarea style="width:100%; min-height:50px; background:var(--q-bg-primary); border:1px solid var(--q-border); border-radius:6px; padding:6px; font-size:11px;" placeholder="What should change ?"></textarea>
-            <div style="display:flex; justify-content:flex-end; gap:6px;">
-              <button class="q-btn">Cancel</button>
-              <button class="q-btn q-btn-primary">Add</button>
-            </div>
-          </div>
-        `;
-        break;
-      }
-
-      case 'layout': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>📐 Layout, Box Model & Spacing</span></div>`;
-        body.innerHTML = `
+          <!-- Spacing Box Diagram Card -->
           <div class="qursor-card">
             <div class="spacing-diagram">
               <div class="margin-box">
@@ -760,28 +728,11 @@ export class InspectorPanel {
                 </div>
               </div>
             </div>
-            <div class="prop-grid" style="margin-top:6px;">
-              <div class="prop-row"><span class="prop-label">Display</span><span class="prop-value">${d.layout.display}</span></div>
-              <div class="prop-row"><span class="prop-label">Position</span><span class="prop-value">${d.layout.position}</span></div>
-              <div class="prop-row"><span class="prop-label">Top / Left</span><span class="prop-value">${d.layout.top} / ${d.layout.left}</span></div>
-              <div class="prop-row"><span class="prop-label">Z-Index</span><span class="prop-value">${d.layout.zIndex}</span></div>
-              <div class="prop-row"><span class="prop-label">Flex Direction</span><span class="prop-value">${d.flexGrid.flexDirection}</span></div>
-              <div class="prop-row"><span class="prop-label">Flex Gap</span><span class="prop-value">${d.flexGrid.gap}</span></div>
-              <div class="prop-row"><span class="prop-label">Border Radius</span><span class="prop-value">${d.border.borderRadius}</span></div>
-            </div>
           </div>
-        `;
-        break;
-      }
 
-      case 'dom': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🌲 DOM Hierarchy & Selectors</span></div>`;
-        body.innerHTML = `
+          <!-- DOM & Selectors -->
           <div class="qursor-card">
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Parent Tag</span><span class="prop-value">&lt;${d.dom.parentTag || 'N/A'}&gt;</span></div>
-              <div class="prop-row"><span class="prop-label">Child Count</span><span class="prop-value">${d.dom.childCount}</span></div>
-              <div class="prop-row"><span class="prop-label">DOM Tree Depth</span><span class="prop-value">${d.dom.depth}</span></div>
               <div class="prop-row"><span class="prop-label">CSS Selector</span><span class="prop-value copy-action-trigger" data-copy-text="${d.selector}" style="cursor:pointer;">${d.selector} 📋</span></div>
               <div class="prop-row"><span class="prop-label">XPath</span><span class="prop-value copy-action-trigger" data-copy-text="${d.xpath}" style="cursor:pointer;">${d.xpath} 📋</span></div>
             </div>
@@ -790,56 +741,50 @@ export class InspectorPanel {
         break;
       }
 
-      case 'overview': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>ⓘ Overview & ARIA Telemetry</span></div>`;
-        body.innerHTML = `
-          <div class="qursor-card">
-            <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Tag Name</span><span class="prop-value">&lt;${d.general.tagName}&gt;</span></div>
-              <div class="prop-row"><span class="prop-label">Element ID</span><span class="prop-value">${d.general.id}</span></div>
-              <div class="prop-row"><span class="prop-label">CSS Classes</span><span class="prop-value">${d.classes.length ? d.classes.join(', ') : 'None'}</span></div>
-              <div class="prop-row"><span class="prop-label">ARIA Role</span><span class="prop-value">${d.general.role}</span></div>
-              <div class="prop-row"><span class="prop-label">Accessible Name</span><span class="prop-value">${d.general.accessibleName || 'N/A'}</span></div>
-              <div class="prop-row"><span class="prop-label">Input Value</span><span class="prop-value">${d.general.value}</span></div>
-              <div class="prop-row"><span class="prop-label">Tab Index</span><span class="prop-value">${d.general.tabIndex}</span></div>
-              <div class="prop-row"><span class="prop-label">Disabled</span><span class="prop-value">${d.general.disabled ? 'Yes' : 'No'}</span></div>
-            </div>
-          </div>
-        `;
-        break;
-      }
-
+      // 3. Code Tab (3rd Feature: Separated HTML, CSS, JS, HTML+CSS+JS, React, Vue, Angular, Tailwind)
       case 'code': {
         triggerBar.innerHTML = `
           <div class="segment-pill-container">
-            <button class="segment-btn ${this.codeScope === 'Selected' ? 'active' : ''}" data-seg-group="codeScope" data-seg-value="Selected">Selected</button>
-            <button class="segment-btn ${this.codeScope === 'Full Page' ? 'active' : ''}" data-seg-group="codeScope" data-seg-value="Full Page">Full Page</button>
+            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_ONLY}">HTML</button>
+            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.CSS_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.CSS_ONLY}">CSS</button>
+            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.JS_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.JS_ONLY}">JS</button>
+            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_CSS_JS ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_CSS_JS}">HTML+CSS+JS</button>
+            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.REACT ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.REACT}">React</button>
+            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.VUE ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.VUE}">Vue</button>
           </div>
         `;
 
-        const codeText = generateComponentCode(d, this.codeFramework);
+        let codeText = '';
+        if (this.codeScope === 'Full Page') {
+          codeText = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${escapeHtml(document.title)}</title>\n${d.pageStyles || ''}\n</head>\n<body>\n${document.body.outerHTML}\n</body>\n</html>`;
+        } else {
+          codeText = generateComponentCode(d, this.codeFormat);
+        }
 
         body.innerHTML = `
           <div class="qursor-card">
             <div class="prop-row">
-              <span class="prop-label">Framework</span>
-              <select class="framework-select" style="background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:3px 6px; font-size:10px;">
-                <option value="${FRAMEWORKS.REACT}" ${this.codeFramework === FRAMEWORKS.REACT ? 'selected' : ''}>React JSX</option>
-                <option value="${FRAMEWORKS.VUE}" ${this.codeFramework === FRAMEWORKS.VUE ? 'selected' : ''}>Vue 3 SFC</option>
-                <option value="${FRAMEWORKS.ANGULAR}" ${this.codeFramework === FRAMEWORKS.ANGULAR ? 'selected' : ''}>Angular Component</option>
-                <option value="${FRAMEWORKS.TAILWIND}" ${this.codeFramework === FRAMEWORKS.TAILWIND ? 'selected' : ''}>Tailwind CSS HTML</option>
-                <option value="${FRAMEWORKS.VANILLA}" ${this.codeFramework === FRAMEWORKS.VANILLA ? 'selected' : ''}>Vanilla HTML/CSS/JS</option>
-                <option value="${FRAMEWORKS.HTML}" ${this.codeFramework === FRAMEWORKS.HTML ? 'selected' : ''}>Clean HTML</option>
-              </select>
+              <span class="prop-label">Scope</span>
+              <div class="segment-pill-container" style="width:160px;">
+                <button class="segment-btn ${this.codeScope === 'Selected' ? 'active' : ''}" data-seg-group="codeScope" data-seg-value="Selected">Selected</button>
+                <button class="segment-btn ${this.codeScope === 'Full Page' ? 'active' : ''}" data-seg-group="codeScope" data-seg-value="Full Page">Full Page</button>
+              </div>
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">Styles</span>
+              <div class="segment-pill-container" style="width:160px;">
+                <button class="segment-btn ${this.codeStyles === 'Computed' ? 'active' : ''}" data-seg-group="codeStyles" data-seg-value="Computed">Computed</button>
+                <button class="segment-btn ${this.codeStyles === 'Classes' ? 'active' : ''}" data-seg-group="codeStyles" data-seg-value="Classes">Classes</button>
+              </div>
             </div>
           </div>
 
           <div class="qursor-card">
             <div class="prop-row" style="font-size:10px; color:var(--q-text-muted);">
-              <span>${d.widthPx}×${d.heightPx} • ${d.dom.childCount || 1} nodes • ${d.classes.length || 8} rules</span>
+              <span>${d.widthPx}×${d.heightPx} • ${d.dom.childCount || 1} nodes • ${this.codeFormat.toUpperCase()}</span>
               <div style="display:flex; gap:4px;">
-                <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(codeText)}" title="Copy Code">📋</button>
-                <button class="icon-action-btn download-action-trigger" title="Download File">↓</button>
+                <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(codeText)}" title="Copy Code">📋 Copy</button>
+                <button class="icon-action-btn download-action-trigger" title="Download File">↓ Download</button>
               </div>
             </div>
             <textarea style="width:100%; min-height:160px; background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:8px; font-family:monospace; font-size:10px; outline:none;" readonly>${escapeHtml(codeText)}</textarea>
@@ -848,6 +793,85 @@ export class InspectorPanel {
         break;
       }
 
+      // 4. Edit Tab (4th Feature: Interactive Property Mutation & Instruction Parser)
+      case 'edit': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>▾ Edit & Annotate &lt;${d.tag.toLowerCase()}&gt;</span></div>`;
+        const hex = rgbToHex(d.colors.color) || '#ffffff';
+        const bgHex = rgbToHex(d.colors.backgroundColor) || '#000000';
+
+        body.innerHTML = `
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px;">Direct Style Modifications</div>
+            <div class="prop-row"><span class="prop-label">color:</span><input type="text" class="edit-prop-input" data-style-prop="color" style="width:100px; text-align:right;" value="${hex}" /></div>
+            <div class="prop-row"><span class="prop-label">background-color:</span><input type="text" class="edit-prop-input" data-style-prop="backgroundColor" style="width:100px; text-align:right;" value="${bgHex}" /></div>
+            <div class="prop-row"><span class="prop-label">font-size:</span><input type="text" class="edit-prop-input" data-style-prop="fontSize" style="width:100px; text-align:right;" value="${d.typography.fontSize}" /></div>
+            <div class="prop-row"><span class="prop-label">font-weight:</span><input type="text" class="edit-prop-input" data-style-prop="fontWeight" style="width:100px; text-align:right;" value="${d.typography.fontWeight}" /></div>
+            <div class="prop-row"><span class="prop-label">border-radius:</span><input type="text" class="edit-prop-input" data-style-prop="borderRadius" style="width:100px; text-align:right;" value="${d.border.borderRadius}" /></div>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:11px;">Natural Language CSS Instruction</div>
+            <textarea id="editInstructionArea" style="width:100%; min-height:50px; background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:6px; font-size:11px;" placeholder="e.g. Make background blue, set font size to 24px...">${escapeHtml(this.editInstructionText)}</textarea>
+            <div style="display:flex; justify-content:flex-end; gap:6px;">
+              <button class="q-btn" id="resetEditBtn">Reset</button>
+              <button class="q-btn q-btn-primary" id="applyEditBtn">Apply Edits</button>
+            </div>
+          </div>
+        `;
+        break;
+      }
+
+      // 5. Assets Tab (5th Feature: Full Subtree Media Scanner & YouTube Thumbnail Support)
+      case 'assets': {
+        const rawAssets = extractElementAssets(this.targetElement || document.body);
+        const filtered = filterAssets(rawAssets, this.assetFilter);
+
+        triggerBar.innerHTML = `
+          <div class="segment-pill-container">
+            <button class="segment-btn ${this.assetFilter === 'All' ? 'active' : ''}" data-seg-group="assetFilter" data-seg-value="All">All (${rawAssets.length})</button>
+            <button class="segment-btn ${this.assetFilter === 'Images' ? 'active' : ''}" data-seg-group="assetFilter" data-seg-value="Images">Images</button>
+            <button class="segment-btn ${this.assetFilter === 'SVG' ? 'active' : ''}" data-seg-group="assetFilter" data-seg-value="SVG">SVG</button>
+            <button class="segment-btn ${this.assetFilter === 'PNG' ? 'active' : ''}" data-seg-group="assetFilter" data-seg-value="PNG">PNG</button>
+            <button class="segment-btn ${this.assetFilter === 'JPG' ? 'active' : ''}" data-seg-group="assetFilter" data-seg-value="JPG">JPG</button>
+          </div>
+        `;
+
+        body.innerHTML = `
+          <div class="section-label-row">
+            <span>DISCOVERED ASSETS (${filtered.length})</span>
+            <span class="node-badge">${this.assetFilter}</span>
+          </div>
+
+          ${filtered.length === 0 ? `
+            <div class="qursor-card" style="text-align:center; padding:20px; color:var(--q-text-muted);">
+              No media assets detected for "${this.assetFilter}" filter.
+            </div>
+          ` : `
+            <div class="asset-grid">
+              ${filtered.map(asset => `
+                <div class="asset-card-item">
+                  <div class="asset-preview-card">
+                    ${asset.type === 'SVG' && asset.url.startsWith('data:image/svg') 
+                      ? `<img src="${asset.url}" style="max-height:60px; max-width:80%; object-fit:contain;" />`
+                      : `<img src="${asset.url}" style="max-height:60px; max-width:80%; object-fit:contain;" onerror="this.onerror=null; this.src='https://via.placeholder.com/60?text=Asset';" />`}
+                  </div>
+                  <div style="font-size:10px; font-weight:600; color:var(--q-text-primary); text-align:center; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${escapeHtml(asset.name)}
+                  </div>
+                  <div style="font-size:9px; color:var(--q-text-muted);">${asset.format} • ${asset.width}</div>
+                  <div style="display:flex; gap:4px; margin-top:2px;">
+                    <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(asset.url)}" title="Copy URL">📋</button>
+                    <a href="${asset.url}" download="${asset.name}" target="_blank" class="icon-action-btn" title="Download Asset" style="text-decoration:none;">↓</a>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        `;
+        break;
+      }
+
+      // 6. Prompt Tab (6th Feature: Structured AI Prompt Builder)
       case 'prompt': {
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>👤 AI Prompt Builder</span></div>`;
         const promptContent = this.editedPromptText || generateStructuredAiPrompt(d, this.promptFrameworkTarget);
@@ -855,7 +879,7 @@ export class InspectorPanel {
         body.innerHTML = `
           <div class="qursor-card">
             <div class="prop-row">
-              <span class="prop-label">Target AI Framework</span>
+              <span class="prop-label">Target Framework</span>
               <select style="background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:3px 6px; font-size:10px;" onchange="this.getRootNode().host._panel.promptFrameworkTarget = this.value; this.getRootNode().host._panel.renderTabContent();">
                 <option value="React" ${this.promptFrameworkTarget === 'React' ? 'selected' : ''}>React</option>
                 <option value="Next.js" ${this.promptFrameworkTarget === 'Next.js' ? 'selected' : ''}>Next.js</option>
@@ -876,20 +900,21 @@ export class InspectorPanel {
         break;
       }
 
+      // 7. Settings Tab (7th Feature: Theme Switcher & Shortcuts)
       case 'settings': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>⚙️ Qursor++ Extension Settings</span></div>`;
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>⚙️ Extension Settings</span></div>`;
         body.innerHTML = `
           <div class="qursor-card">
             <div class="prop-row">
               <span class="prop-label">Theme Mode</span>
-              <button class="q-btn" onclick="this.getRootNode().host._panel.themeManager.toggleTheme();">Toggle Light/Dark</button>
+              <button class="q-btn" onclick="this.getRootNode().host._panel.themeManager.toggleTheme();">Toggle Light/Dark Theme</button>
             </div>
             <div class="prop-row">
               <span class="prop-label">Shortcut Toggle</span>
               <span class="prop-value">Ctrl + Shift + I</span>
             </div>
             <div class="prop-row">
-              <span class="prop-label">Exit Inspect</span>
+              <span class="prop-label">Exit Inspect Mode</span>
               <span class="prop-value">ESC</span>
             </div>
           </div>

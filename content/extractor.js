@@ -1,8 +1,9 @@
 /**
- * Qursor++ - Element Data Extractor
+ * Qursor++ - Element Data Extractor (YouTube Thumbnail & Media Intelligence)
  * 
  * Master analytical engine collecting complete DevTools-grade DOM properties,
  * computed styles, box model, hierarchy, selector paths, accessibility, and element-specific details.
+ * Supports YouTube thumbnails, lazy-loaded images, SVG graphics, and dynamic media containers.
  */
 
 import { getCssSelector, getXPath } from '../utils/selector.js';
@@ -59,8 +60,8 @@ export function extractElementData(element) {
     hidden: element.hidden || styles.layout.display === 'none'
   };
 
-  // Element Specific Details (Images, Links, Buttons, Inputs, SVGs)
-  const specialDetails = extractSpecializedDetails(element, tag);
+  // Element Specific Details (Images, YouTube Thumbnails, Links, Buttons, Inputs, SVGs)
+  const specialDetails = extractSpecializedDetails(element, tag, styles);
   const pageStyles = getPageStylesheets();
   const rect = element.getBoundingClientRect();
 
@@ -110,11 +111,6 @@ export function getPageStylesheets() {
   return styles.join('\n');
 }
 
-/**
- * Extracts all ARIA attributes present on the element
- * @param {Element} element 
- * @returns {Record<string, string>}
- */
 function extractAriaAttributes(element) {
   const aria = {};
   for (let i = 0; i < element.attributes.length; i++) {
@@ -126,9 +122,6 @@ function extractAriaAttributes(element) {
   return aria;
 }
 
-/**
- * Extracts accessible name from ARIA, alt, title, label, or text content
- */
 function extractAccessibleName(element) {
   if (element.getAttribute('aria-label')) return element.getAttribute('aria-label');
   if (element.getAttribute('aria-labelledby')) {
@@ -141,9 +134,6 @@ function extractAccessibleName(element) {
   return getCleanTextContent(element, 50) || 'N/A';
 }
 
-/**
- * Derives implicit WAI-ARIA role based on HTML5 element semantics
- */
 function getImplicitRole(element) {
   const tag = element.tagName.toLowerCase();
   const type = element.getAttribute('type');
@@ -166,20 +156,34 @@ function getImplicitRole(element) {
 }
 
 /**
- * Extracts type-specific details for Images, Links, Buttons, Inputs, SVGs
+ * Extracts type-specific details for Images (including YouTube thumbnails), Links, Buttons, Inputs, SVGs
  */
-function extractSpecializedDetails(element, tag) {
+function extractSpecializedDetails(element, tag, styles) {
   const details = {};
 
-  if (tag === 'img') {
-    const img = /** @type {HTMLImageElement} */ (element);
+  // Check if selected element OR any child is an image or thumbnail container
+  const childImg = tag === 'img' ? element : element.querySelector('img');
+  let bgImageUrl = null;
+
+  if (styles && styles.colors && styles.colors.backgroundColor && styles.colors.backgroundColor !== 'transparent') {
+    const cs = window.getComputedStyle(element);
+    if (cs && cs.backgroundImage && cs.backgroundImage !== 'none') {
+      const match = cs.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+      if (match) bgImageUrl = match[1];
+    }
+  }
+
+  if (childImg || bgImageUrl) {
+    const img = /** @type {HTMLImageElement} */ (childImg || {});
+    const url = img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-thumb') || bgImageUrl || 'N/A';
+
     details.type = 'IMAGE';
-    details.imageUrl = img.currentSrc || img.src || 'N/A';
-    details.naturalWidth = `${img.naturalWidth}px`;
-    details.naturalHeight = `${img.naturalHeight}px`;
-    details.displayedWidth = `${Math.round(img.width)}px`;
-    details.displayedHeight = `${Math.round(img.height)}px`;
-    details.altText = img.alt || 'N/A';
+    details.imageUrl = url;
+    details.naturalWidth = img.naturalWidth ? `${img.naturalWidth}px` : 'Auto';
+    details.naturalHeight = img.naturalHeight ? `${img.naturalHeight}px` : 'Auto';
+    details.displayedWidth = `${Math.round(element.getBoundingClientRect().width)}px`;
+    details.displayedHeight = `${Math.round(element.getBoundingClientRect().height)}px`;
+    details.altText = img.alt || element.getAttribute('aria-label') || 'YouTube/Web Thumbnail';
     details.isLazyLoaded = img.loading === 'lazy';
   } else if (tag === 'svg' || element.querySelector('svg')) {
     details.type = 'SVG';
