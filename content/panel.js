@@ -71,7 +71,6 @@ export class InspectorPanel {
         bottom: 30px;
         right: 30px;
         width: 440px;
-        max-height: 85vh;
         background: var(--q-bg-primary, #161618);
         color: var(--q-text-primary, #f5f5f7);
         border: 1px solid var(--q-border, #3a3a3c);
@@ -82,7 +81,9 @@ export class InspectorPanel {
         display: none;
         flex-direction: column;
         z-index: 2147483647;
-        overflow: hidden;
+        /* overflow:hidden removed — it was preventing the body scrollbar from working.
+           border-radius still works visually; border clips content naturally at corners. */
+        overflow: visible;
         pointer-events: auto !important;
         resize: both;
         min-width: 360px;
@@ -243,7 +244,9 @@ export class InspectorPanel {
       }
       .zoom-btn:hover { background: var(--q-bg-surface-elevated); }
 
-      /* Panel Body — flex: 1 + min-height: 0 is the critical flexbox scroll fix */
+      /* Panel Body — uses direct calc() max-height so scroll ALWAYS works regardless of flex context.
+         Formula: 100vh - 30px (bottom) - navbar (~46px) - trigger-bar (~46px) - some breathing room.
+         This is more reliable than flex:1 + min-height:0 which needs parent to have bounded height. */
       .qursor-panel-body {
         padding: 12px;
         display: flex;
@@ -251,10 +254,12 @@ export class InspectorPanel {
         gap: 10px;
         overflow-y: auto;
         overflow-x: hidden;
-        flex: 1;
-        min-height: 0;
+        max-height: calc(100vh - 170px);
+        /* Clip body corners to match panel border-radius since panel itself has overflow:visible */
+        border-bottom-left-radius: 18px;
+        border-bottom-right-radius: 18px;
       }
-      /* Custom scrollbar styling inside shadow DOM */
+      /* Custom slim scrollbar inside shadow DOM */
       .qursor-panel-body::-webkit-scrollbar {
         width: 5px;
       }
