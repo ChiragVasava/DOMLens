@@ -11,8 +11,18 @@
  */
 export function rgbToHex(rgbStr) {
   if (!rgbStr || rgbStr === 'transparent') return 'transparent';
-  const match = rgbStr.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
-  if (!match) return rgbStr;
+  if (typeof rgbStr === 'string' && rgbStr.startsWith('#')) return rgbStr.toUpperCase();
+  const match = String(rgbStr).match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
+  if (!match) {
+    const subMatch = String(rgbStr).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (subMatch) {
+      const r = parseInt(subMatch[1], 10).toString(16).padStart(2, '0');
+      const g = parseInt(subMatch[2], 10).toString(16).padStart(2, '0');
+      const b = parseInt(subMatch[3], 10).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}`.toUpperCase();
+    }
+    return String(rgbStr);
+  }
 
   const r = parseInt(match[1], 10).toString(16).padStart(2, '0');
   const g = parseInt(match[2], 10).toString(16).padStart(2, '0');
@@ -20,9 +30,9 @@ export function rgbToHex(rgbStr) {
   
   if (match[4] !== undefined && parseFloat(match[4]) < 1) {
     const a = Math.round(parseFloat(match[4]) * 255).toString(16).padStart(2, '0');
-    return `#${r}${g}${b}${a}`;
+    return `#${r}${g}${b}${a}`.toUpperCase();
   }
-  return `#${r}${g}${b}`;
+  return `#${r}${g}${b}`.toUpperCase();
 }
 
 /**
@@ -77,9 +87,13 @@ export function extractComputedStyles(element) {
       textDecoration: style.textDecorationLine || style.textDecoration
     },
     colors: {
-      textColor: `${style.color} (${rgbToHex(style.color)})`,
-      backgroundColor: `${style.backgroundColor} (${rgbToHex(style.backgroundColor)})`,
-      borderColor: style.borderColor ? `${style.borderColor} (${rgbToHex(style.borderColor)})` : 'none',
+      color: style.color,
+      backgroundColor: style.backgroundColor,
+      borderColor: style.borderColor,
+      textColor: style.color,
+      hexColor: rgbToHex(style.color),
+      hexBgColor: rgbToHex(style.backgroundColor),
+      hexBorderColor: rgbToHex(style.borderColor),
       outlineColor: style.outlineColor,
       boxShadow: style.boxShadow !== 'none' ? style.boxShadow : 'none',
       opacity: style.opacity
