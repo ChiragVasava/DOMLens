@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Qursor++ AI Inspector</title>
+  <title>Qursor++</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 
@@ -15,14 +15,13 @@
       <div class="logo-wrapper">
         <img src="../assets/logo.svg" alt="Qursor++ Logo" class="logo">
         <div class="title-container">
-          <h1 class="title">Qursor++ <span class="badge-ai">AI</span></h1>
-          <span class="version-tag">v1.0.0</span>
+          <h1 class="title">Qursor++</h1>
+          <span class="version-tag">Point. Inspect. Generate. Build.</span>
         </div>
       </div>
-      <!-- Theme Switcher Control -->
       <div class="theme-switcher" id="themeSwitcher">
+        <button class="theme-btn active" data-theme-val="light" title="Light Theme">☀️</button>
         <button class="theme-btn" data-theme-val="dark" title="Dark Theme">🌙</button>
-        <button class="theme-btn" data-theme-val="light" title="Light Theme">☀️</button>
       </div>
     </header>
 
@@ -32,12 +31,12 @@
       <div class="status-card" id="statusCard">
         <div class="status-indicator" id="statusIndicator"></div>
         <div class="status-info">
-          <span class="status-label">Inspector Status</span>
-          <span class="status-text" id="statusText">Inactive</span>
+          <span class="status-label">INSPECTOR STATUS</span>
+          <span class="status-text" id="statusText">Ready to Inspect</span>
         </div>
       </div>
 
-      <!-- Action Buttons -->
+      <!-- Primary Action Button -->
       <div class="actions">
         <button id="toggleBtn" class="btn btn-primary">
           <span class="btn-icon">⚡</span>
@@ -59,10 +58,11 @@
 
       <!-- Feature Badges -->
       <div class="features-badge-row">
-        <span class="f-badge">⚛️ React JSX</span>
-        <span class="f-badge">🟢 Vue SFC</span>
-        <span class="f-badge">🎨 Tailwind</span>
-        <span class="f-badge">✨ AI Prompt</span>
+        <span class="f-badge">T Typography</span>
+        <span class="f-badge">🎨 Colors</span>
+        <span class="f-badge">🖼️ Assets</span>
+        <span class="f-badge">📄 Code</span>
+        <span class="f-badge">👤 Prompt</span>
       </div>
 
       <!-- Navigation Links -->

@@ -1,8 +1,8 @@
 /**
- * Qursor++ - Theme & Design Token Manager
+ * Qursor++ - Theme & Design Token Manager (Exact Qursor Replica)
  * 
- * Manages Dark, Light, and System themes using CSS Custom Properties (Design Tokens).
- * Persists user preference in chrome.storage.sync and syncs across popup and Shadow DOM.
+ * Manages Dark, Light, and System themes using CSS Custom Properties (Design Tokens)
+ * matching the Qursor floating UI design system.
  */
 
 export const THEMES = {
@@ -17,97 +17,97 @@ export const THEME_STORAGE_KEY = 'qursor_theme_preference';
  * Theme Design Tokens Definitions
  */
 export const DESIGN_TOKENS = `
-  :host, [data-theme="dark"] {
-    --q-bg-primary: #0f172a;
-    --q-bg-surface: #1e293b;
-    --q-bg-surface-elevated: #334155;
-    --q-bg-hover: rgba(255, 255, 255, 0.05);
+  :host, [data-theme="light"] {
+    --q-bg-primary: #f5f5f7;
+    --q-bg-surface: #ffffff;
+    --q-bg-surface-elevated: #e8e8ed;
+    --q-bg-hover: rgba(0, 0, 0, 0.04);
     
-    --q-border: #334155;
+    --q-border: #e5e5ea;
+    --q-border-subtle: rgba(0, 0, 0, 0.06);
+    --q-border-focus: #2563eb;
+    
+    --q-text-primary: #1d1d1f;
+    --q-text-secondary: #424245;
+    --q-text-muted: #86868b;
+    --q-text-accent: #2563eb;
+    
+    --q-accent: #2563eb;
+    --q-accent-bg: rgba(37, 99, 235, 0.08);
+    --q-accent-hover: #1d4ed8;
+    
+    --q-success: #34c759;
+    --q-success-bg: rgba(52, 199, 89, 0.12);
+    --q-warning: #ff9500;
+    --q-warning-bg: rgba(255, 149, 0, 0.12);
+    --q-error: #ff3b30;
+    --q-error-bg: rgba(255, 59, 48, 0.12);
+    
+    --q-overlay-hover-border: 2px solid #2563eb;
+    --q-overlay-hover-bg: rgba(37, 99, 235, 0.12);
+    --q-overlay-hover-shadow: 0 0 12px rgba(37, 99, 235, 0.35);
+    
+    --q-overlay-select-border: 2px solid #2563eb;
+    --q-overlay-select-bg: rgba(37, 99, 235, 0.12);
+    --q-overlay-select-shadow: 0 0 14px rgba(37, 99, 235, 0.4);
+    
+    --q-code-bg: #f8fafc;
+    --q-code-text: #1d1d1f;
+    --q-code-keyword: #d946ef;
+    --q-code-string: #059669;
+    --q-code-attr: #2563eb;
+
+    --q-shadow-panel: 0 16px 40px -8px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  [data-theme="dark"] {
+    --q-bg-primary: #161618;
+    --q-bg-surface: #242426;
+    --q-bg-surface-elevated: #2c2c2e;
+    --q-bg-hover: rgba(255, 255, 255, 0.06);
+    
+    --q-border: #3a3a3c;
     --q-border-subtle: rgba(255, 255, 255, 0.08);
-    --q-border-focus: #38bdf8;
+    --q-border-focus: #3b82f6;
     
-    --q-text-primary: #f8fafc;
-    --q-text-secondary: #cbd5e1;
-    --q-text-muted: #94a3b8;
-    --q-text-accent: #38bdf8;
+    --q-text-primary: #f5f5f7;
+    --q-text-secondary: #d1d1d6;
+    --q-text-muted: #8e8e93;
+    --q-text-accent: #3b82f6;
     
-    --q-accent: #38bdf8;
-    --q-accent-bg: rgba(56, 189, 248, 0.12);
-    --q-accent-hover: #0284c7;
+    --q-accent: #3b82f6;
+    --q-accent-bg: rgba(59, 130, 246, 0.15);
+    --q-accent-hover: #2563eb;
     
-    --q-success: #10b981;
-    --q-success-bg: rgba(16, 185, 129, 0.15);
-    --q-warning: #f59e0b;
-    --q-warning-bg: rgba(245, 158, 11, 0.15);
-    --q-error: #ef4444;
-    --q-error-bg: rgba(239, 68, 68, 0.15);
+    --q-success: #30d158;
+    --q-success-bg: rgba(48, 209, 88, 0.15);
+    --q-warning: #ff9f0a;
+    --q-warning-bg: rgba(255, 159, 10, 0.15);
+    --q-error: #ff453a;
+    --q-error-bg: rgba(255, 69, 58, 0.15);
     
-    --q-overlay-hover-border: 2px solid #38bdf8;
-    --q-overlay-hover-bg: rgba(56, 189, 248, 0.15);
-    --q-overlay-hover-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+    --q-overlay-hover-border: 2px solid #3b82f6;
+    --q-overlay-hover-bg: rgba(59, 130, 246, 0.15);
+    --q-overlay-hover-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
     
-    --q-overlay-select-border: 2px solid #10b981;
-    --q-overlay-select-bg: rgba(16, 185, 129, 0.15);
-    --q-overlay-select-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+    --q-overlay-select-border: 2px solid #3b82f6;
+    --q-overlay-select-bg: rgba(59, 130, 246, 0.15);
+    --q-overlay-select-shadow: 0 0 14px rgba(59, 130, 246, 0.5);
     
-    --q-code-bg: #090d16;
-    --q-code-text: #e2e8f0;
+    --q-code-bg: #1c1c1e;
+    --q-code-text: #f5f5f7;
     --q-code-keyword: #f472b6;
     --q-code-string: #a7f3d0;
     --q-code-attr: #38bdf8;
 
-    --q-shadow-panel: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(56, 189, 248, 0.25);
-  }
-
-  [data-theme="light"] {
-    --q-bg-primary: #ffffff;
-    --q-bg-surface: #f8fafc;
-    --q-bg-surface-elevated: #f1f5f9;
-    --q-bg-hover: rgba(0, 0, 0, 0.04);
-    
-    --q-border: #e2e8f0;
-    --q-border-subtle: rgba(0, 0, 0, 0.06);
-    --q-border-focus: #0284c7;
-    
-    --q-text-primary: #0f172a;
-    --q-text-secondary: #334155;
-    --q-text-muted: #64748b;
-    --q-text-accent: #0284c7;
-    
-    --q-accent: #0284c7;
-    --q-accent-bg: rgba(2, 132, 199, 0.1);
-    --q-accent-hover: #0369a1;
-    
-    --q-success: #059669;
-    --q-success-bg: rgba(5, 150, 105, 0.1);
-    --q-warning: #d97706;
-    --q-warning-bg: rgba(217, 119, 6, 0.1);
-    --q-error: #dc2626;
-    --q-error-bg: rgba(220, 38, 38, 0.1);
-    
-    --q-overlay-hover-border: 2px solid #0284c7;
-    --q-overlay-hover-bg: rgba(2, 132, 199, 0.15);
-    --q-overlay-hover-shadow: 0 0 10px rgba(2, 132, 199, 0.3);
-    
-    --q-overlay-select-border: 2px solid #059669;
-    --q-overlay-select-bg: rgba(5, 150, 105, 0.15);
-    --q-overlay-select-shadow: 0 0 12px rgba(5, 150, 105, 0.4);
-    
-    --q-code-bg: #f8fafc;
-    --q-code-text: #0f172a;
-    --q-code-keyword: #d946ef;
-    --q-code-string: #059669;
-    --q-code-attr: #0284c7;
-
-    --q-shadow-panel: 0 10px 30px -5px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(2, 132, 199, 0.2);
+    --q-shadow-panel: 0 20px 48px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 `;
 
 export class ThemeManager {
   constructor(targetElement = null) {
-    this.targetElement = targetElement; // Shadow Root or DOM Container
-    this.currentTheme = THEMES.DARK;
+    this.targetElement = targetElement;
+    this.currentTheme = THEMES.LIGHT; // Default Light mode matching Qursor screenshots
     this.listeners = [];
   }
 
@@ -117,7 +117,7 @@ export class ThemeManager {
   async init() {
     return new Promise((resolve) => {
       chrome.storage.sync.get([THEME_STORAGE_KEY], (res) => {
-        const storedTheme = res[THEME_STORAGE_KEY] || THEMES.DARK;
+        const storedTheme = res[THEME_STORAGE_KEY] || THEMES.LIGHT;
         this.setTheme(storedTheme, false);
         resolve(this.currentTheme);
       });
@@ -135,7 +135,6 @@ export class ThemeManager {
 
     if (this.targetElement) {
       if (this.targetElement.host) {
-        // Shadow Root host
         this.targetElement.host.setAttribute('data-theme', effectiveTheme);
       } else if (this.targetElement.setAttribute) {
         this.targetElement.setAttribute('data-theme', effectiveTheme);
@@ -149,25 +148,17 @@ export class ThemeManager {
     this.notifyListeners(effectiveTheme);
   }
 
-  /**
-   * Resolves effective theme given system preference if set to 'system'
-   * @param {string} theme 
-   * @returns {string} 'dark' | 'light'
-   */
   getEffectiveTheme(theme) {
     if (theme === THEMES.SYSTEM) {
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
-        ? THEMES.LIGHT
-        : THEMES.DARK;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? THEMES.DARK
+        : THEMES.LIGHT;
     }
-    return theme === THEMES.LIGHT ? THEMES.LIGHT : THEMES.DARK;
+    return theme === THEMES.DARK ? THEMES.DARK : THEMES.LIGHT;
   }
 
-  /**
-   * Toggles between dark and light themes
-   */
   toggleTheme() {
-    const nextTheme = this.getEffectiveTheme(this.currentTheme) === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK;
+    const nextTheme = this.getEffectiveTheme(this.currentTheme) === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
     this.setTheme(nextTheme, true);
     return nextTheme;
   }

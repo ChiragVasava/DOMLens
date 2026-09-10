@@ -1,29 +1,38 @@
 /**
- * Qursor++ - Floating Information Panel UI
+ * Qursor++ - Floating Information Panel UI (100% Qursor Replica)
  * 
- * Production-grade, movable, resizable, collapsible developer tool floating panel.
- * Built with CSS Design Tokens (Dark/Light mode support), Shadow DOM isolation,
- * 12 developer-focused data tabs, multi-framework code generator, AI prompt generator,
- * and toast notification feedback.
+ * Replicates the exact visual identity, icon header toolbar, specimen cards,
+ * typography inspector, asset grid, code scope pills, inline style editor, and AI prompt builder.
  */
 
-import { PANEL_TABS } from '../utils/constants.js';
 import { copyToClipboard } from '../utils/clipboard.js';
 import { DESIGN_TOKENS, ThemeManager, THEMES } from '../utils/theme.js';
 import { ToastManager } from '../utils/toast.js';
 import { generateComponentCode, FRAMEWORKS } from '../utils/component_generator.js';
 import { generateStructuredAiPrompt } from '../utils/prompt_generator.js';
 
+export const QURSOR_NAV_TABS = [
+  { id: 'edit', label: 'Edit & Annotate', icon: '💬' },
+  { id: 'colors', label: 'Colors', icon: '🎨' },
+  { id: 'typography', label: 'Typography', icon: 'T' },
+  { id: 'assets', label: 'Assets', icon: '🖼️' },
+  { id: 'code', label: 'Code', icon: '📄' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'prompt', label: 'AI Prompt', icon: '👤' },
+];
+
 export class InspectorPanel {
   constructor(shadowRoot) {
     this.shadowRoot = shadowRoot;
     this.panelContainer = null;
     this.currentData = null;
-    this.activeTab = 'overview';
-    this.selectedFramework = FRAMEWORKS.REACT;
+    this.activeTab = 'typography';
+    this.codeSegment = 'HTML + CSS'; // 'HTML + CSS' | 'JSX'
+    this.codeScope = 'Selected'; // 'Selected' | 'Full Page'
+    this.codeStyles = 'Computed'; // 'Computed' | 'Classes'
+    this.assetSegment = 'By Type'; // 'By Type' | 'All'
     this.promptFrameworkTarget = 'React';
     this.editedPromptText = null;
-    this.isCollapsed = false;
     this.isDragging = false;
     this.dragOffsetX = 0;
     this.dragOffsetY = 0;
@@ -43,18 +52,17 @@ export class InspectorPanel {
     style.textContent = `
       ${DESIGN_TOKENS}
 
-      .inspector-panel {
+      .qursor-floating-panel {
         position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 520px;
-        height: 600px;
-        background: var(--q-bg-primary, #0f172a);
-        color: var(--q-text-primary, #f8fafc);
-        border: 1px solid var(--q-border, #334155);
-        border-radius: 12px;
+        bottom: 30px;
+        right: 30px;
+        width: 380px;
+        background: var(--q-bg-primary, #f5f5f7);
+        color: var(--q-text-primary, #1d1d1f);
+        border: 1px solid var(--q-border, #e5e5ea);
+        border-radius: 18px;
         box-shadow: var(--q-shadow-panel);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, sans-serif;
         font-size: 12px;
         display: flex;
         flex-direction: column;
@@ -62,55 +70,61 @@ export class InspectorPanel {
         overflow: hidden;
         pointer-events: auto !important;
         resize: both;
-        min-width: 360px;
-        min-height: 280px;
-        backdrop-filter: blur(16px);
+        min-width: 340px;
+        max-width: 460px;
+        backdrop-filter: blur(20px);
         transition: background 0.2s, border-color 0.2s;
       }
 
-      .inspector-panel.collapsed {
-        height: 44px !important;
-        min-height: 44px !important;
-        resize: none;
-      }
-
-      .inspector-panel.collapsed .panel-tabs,
-      .inspector-panel.collapsed .panel-body,
-      .inspector-panel.collapsed .panel-toolbar {
-        display: none !important;
-      }
-
-      /* Header */
-      .panel-header {
-        background: var(--q-bg-surface, #1e293b);
-        padding: 8px 12px;
+      /* Top Icon Navigation Header Bar */
+      .qursor-icon-navbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid var(--q-border, #334155);
+        padding: 10px 14px;
+        background: var(--q-bg-surface, #ffffff);
+        border-bottom: 1px solid var(--q-border-subtle);
         cursor: move;
         user-select: none;
       }
 
-      .panel-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 700;
-        font-size: 13px;
-        color: var(--q-text-accent, #38bdf8);
-      }
-
-      .header-actions {
+      .navbar-icons-group {
         display: flex;
         align-items: center;
         gap: 6px;
       }
 
-      .panel-btn {
-        background: var(--q-bg-surface-elevated, #334155);
-        color: var(--q-text-secondary, #cbd5e1);
-        border: 1px solid var(--q-border, #334155);
+      .nav-icon-btn {
+        background: none;
+        border: none;
+        color: var(--q-text-muted, #86868b);
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.15s;
+      }
+
+      .nav-icon-btn:hover {
+        background: var(--q-bg-hover);
+        color: var(--q-text-primary);
+      }
+
+      .nav-icon-btn.active {
+        background: var(--q-bg-surface-elevated, #e8e8ed);
+        color: var(--q-text-primary, #1d1d1f);
+        font-weight: 700;
+      }
+
+      .nav-close-btn {
+        background: none;
+        border: none;
+        color: var(--q-text-muted);
         width: 26px;
         height: 26px;
         border-radius: 6px;
@@ -118,327 +132,265 @@ export class InspectorPanel {
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-size: 13px;
-        font-weight: bold;
-        transition: all 0.15s;
+        font-size: 14px;
+      }
+      .nav-close-btn:hover { color: var(--q-text-primary); }
+
+      /* Action Trigger Pill / Search Bar */
+      .qursor-trigger-bar {
+        padding: 8px 12px;
+        background: var(--q-bg-primary);
+        border-bottom: 1px solid var(--q-border-subtle);
       }
 
-      .panel-btn:hover {
-        background: var(--q-accent, #38bdf8);
-        color: #0f172a;
-        border-color: var(--q-accent, #38bdf8);
-      }
-
-      /* Tabs Navigation */
-      .panel-tabs {
-        display: flex;
-        background: var(--q-bg-primary, #0f172a);
-        border-bottom: 1px solid var(--q-border, #334155);
-        overflow-x: auto;
-        user-select: none;
-      }
-
-      .panel-tabs::-webkit-scrollbar {
-        height: 3px;
-      }
-      .panel-tabs::-webkit-scrollbar-thumb {
-        background: var(--q-border, #334155);
-        border-radius: 2px;
-      }
-
-      .tab-btn {
-        padding: 8px 10px;
-        background: none;
-        border: none;
-        color: var(--q-text-muted, #94a3b8);
-        font-size: 11px;
-        font-weight: 600;
-        cursor: pointer;
-        white-space: nowrap;
+      .trigger-input-pill {
+        background: var(--q-bg-surface, #ffffff);
+        border: 1px solid var(--q-border, #e5e5ea);
+        border-radius: 8px;
+        padding: 6px 12px;
         display: flex;
         align-items: center;
-        gap: 5px;
-        border-bottom: 2px solid transparent;
+        justify-content: center;
+        gap: 6px;
+        color: var(--q-text-muted);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      /* Segment Pill Controls */
+      .segment-pill-container {
+        display: flex;
+        background: var(--q-bg-surface-elevated, #e8e8ed);
+        border-radius: 8px;
+        padding: 2px;
+        gap: 2px;
+        width: 100%;
+      }
+
+      .segment-btn {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--q-text-muted);
+        cursor: pointer;
+        text-align: center;
         transition: all 0.15s;
       }
 
-      .tab-btn:hover { 
-        color: var(--q-text-primary, #f8fafc); 
-        background: var(--q-bg-hover);
-      }
-      .tab-btn.active {
-        color: var(--q-text-accent, #38bdf8);
-        border-bottom-color: var(--q-text-accent, #38bdf8);
-        background: var(--q-accent-bg, rgba(56, 189, 248, 0.12));
+      .segment-btn.active {
+        background: var(--q-bg-surface, #ffffff);
+        color: var(--q-text-primary, #1d1d1f);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       }
 
-      /* Body Content */
-      .panel-body {
-        flex: 1;
+      /* Panel Body Card */
+      .qursor-panel-body {
         padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
         overflow-y: auto;
+        max-height: 480px;
+      }
+
+      .section-label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: var(--q-text-muted, #86868b);
+        text-transform: uppercase;
+      }
+
+      .node-badge {
+        background: var(--q-bg-surface-elevated);
+        color: var(--q-text-muted);
+        border-radius: 10px;
+        padding: 1px 6px;
+        font-size: 9px;
+      }
+
+      .qursor-card {
+        background: var(--q-bg-surface, #ffffff);
+        border: 1px solid var(--q-border, #e5e5ea);
+        border-radius: 12px;
+        padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+
+      /* Typography Specimen Spec */
+      .specimen-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--q-text-primary);
+      }
+
+      .specimen-preview-box {
+        font-size: 18px;
+        line-height: 1.3;
+        color: var(--q-text-primary);
+        word-break: break-all;
+        padding: 8px 0;
         user-select: text;
       }
 
-      .panel-body::-webkit-scrollbar {
-        width: 6px;
-      }
-      .panel-body::-webkit-scrollbar-track {
-        background: var(--q-bg-primary);
-      }
-      .panel-body::-webkit-scrollbar-thumb {
-        background: var(--q-border);
-        border-radius: 3px;
+      /* Grid Property Table */
+      .prop-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
       }
 
-      .data-row {
+      .prop-row {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        padding: 7px 10px;
-        background: var(--q-bg-surface, #1e293b);
-        border-radius: 6px;
-        border: 1px solid var(--q-border-subtle);
-        gap: 12px;
+        align-items: center;
+        font-size: 11px;
       }
 
-      .data-label {
-        color: var(--q-text-muted, #94a3b8);
-        font-weight: 600;
-        font-size: 11px;
-        min-width: 110px;
+      .prop-label { color: var(--q-text-muted); font-weight: 500; }
+      .prop-value { color: var(--q-text-primary); font-weight: 600; font-family: SFMono-Regular, Consolas, monospace; display: flex; align-items: center; gap: 4px; }
+
+      .contrast-badge {
+        background: var(--q-success-bg, rgba(52, 199, 89, 0.12));
+        color: var(--q-success, #34c759);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: 700;
       }
 
-      .data-value {
-        color: var(--q-text-primary, #f8fafc);
-        font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
-        font-size: 11px;
-        word-break: break-all;
-        text-align: right;
-        max-width: 70%;
-        user-select: text;
+      /* Checkerboard Asset Preview Box */
+      .asset-preview-card {
+        background-color: #ffffff;
+        background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        border-radius: 8px;
+        height: 100px;
         display: flex;
         align-items: center;
+        justify-content: center;
+        border: 1px solid var(--q-border);
+      }
+
+      .asset-action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 4px;
+      }
+
+      .icon-action-btn {
+        background: none;
+        border: none;
+        color: var(--q-text-muted);
+        cursor: pointer;
+        padding: 4px;
+        font-size: 13px;
+        border-radius: 4px;
+      }
+      .icon-action-btn:hover { color: var(--q-text-primary); background: var(--q-bg-hover); }
+
+      /* Editable Property Row */
+      .edit-prop-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        font-size: 11px;
+      }
+
+      .edit-prop-input {
+        background: var(--q-bg-primary);
+        border: 1px solid var(--q-border);
+        border-radius: 4px;
+        padding: 3px 6px;
+        font-family: monospace;
+        font-size: 11px;
+        color: var(--q-text-primary);
+        width: 100px;
+        text-align: right;
+      }
+
+      .comment-textarea {
+        background: var(--q-bg-surface);
+        border: 1px solid var(--q-border);
+        border-radius: 8px;
+        padding: 8px;
+        font-family: inherit;
+        font-size: 11px;
+        color: var(--q-text-primary);
+        resize: vertical;
+        min-height: 50px;
+        outline: none;
+      }
+
+      .comment-btn-group {
+        display: flex;
         justify-content: flex-end;
         gap: 6px;
       }
 
-      .color-swatch {
-        width: 12px;
-        height: 12px;
-        border-radius: 3px;
-        border: 1px solid rgba(255,255,255,0.2);
-        display: inline-block;
-      }
-
-      /* Editor & Code Blocks */
-      .editor-container {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        height: 100%;
-      }
-
-      .editor-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: var(--q-bg-surface);
-        padding: 6px 10px;
+      .q-btn {
+        padding: 5px 12px;
         border-radius: 6px;
         border: 1px solid var(--q-border);
-      }
-
-      .framework-select {
-        background: var(--q-bg-primary);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--q-bg-surface-elevated);
         color: var(--q-text-primary);
-        border: 1px solid var(--q-border);
-        border-radius: 4px;
-        padding: 4px 8px;
-        font-size: 11px;
-        font-weight: 600;
-        cursor: pointer;
-        outline: none;
       }
 
-      .code-editor {
-        background: var(--q-code-bg, #090d16);
-        color: var(--q-code-text, #e2e8f0);
-        border: 1px solid var(--q-border, #334155);
-        border-radius: 8px;
-        padding: 12px;
-        font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
-        font-size: 11px;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-break: break-all;
-        flex: 1;
-        min-height: 280px;
-        max-height: 380px;
-        overflow-y: auto;
-        outline: none;
-        resize: vertical;
-      }
-
-      /* Spacing Diagram */
-      .spacing-diagram {
-        background: var(--q-bg-surface);
-        border: 1px solid var(--q-border);
-        border-radius: 8px;
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        font-family: monospace;
-        font-size: 11px;
-      }
-
-      .margin-box {
-        border: 1px dashed #f59e0b;
-        background: rgba(245, 158, 11, 0.08);
-        padding: 12px;
-        border-radius: 6px;
-        width: 80%;
-        text-align: center;
-      }
-
-      .padding-box {
-        border: 1px dashed #38bdf8;
-        background: rgba(56, 189, 248, 0.08);
-        padding: 12px;
-        border-radius: 4px;
-        text-align: center;
-      }
-
-      .element-box {
-        border: 1px solid #10b981;
-        background: rgba(16, 185, 129, 0.15);
-        padding: 8px;
-        border-radius: 3px;
-        color: #10b981;
-        font-weight: bold;
-      }
-
-      /* Action Toolbar */
-      .panel-toolbar {
-        padding: 8px 10px;
-        background: var(--q-bg-surface, #1e293b);
-        border-top: 1px solid var(--q-border, #334155);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .toolbar-left, .toolbar-right {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .copy-btn {
-        background: var(--q-bg-surface-elevated, #334155);
-        color: var(--q-text-primary, #f8fafc);
-        border: 1px solid var(--q-border, #475569);
-        border-radius: 6px;
-        padding: 5px 9px;
-        font-size: 11px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.15s;
-      }
-
-      .copy-btn:hover {
-        background: var(--q-accent, #38bdf8);
-        color: #0f172a;
-        border-color: var(--q-accent, #38bdf8);
-      }
-
-      .copy-btn-primary {
-        background: var(--q-accent, #38bdf8);
-        color: #0f172a;
-        border-color: var(--q-accent, #38bdf8);
-      }
-      .copy-btn-primary:hover {
-        background: var(--q-accent-hover, #0284c7);
+      .q-btn-primary {
+        background: var(--q-accent, #2563eb);
         color: #ffffff;
-      }
-
-      .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        color: var(--q-text-muted);
-        gap: 12px;
-        text-align: center;
-        padding: 32px 16px;
+        border-color: var(--q-accent, #2563eb);
       }
     `;
 
     this.shadowRoot.appendChild(style);
 
     this.panelContainer = document.createElement('div');
-    this.panelContainer.className = 'inspector-panel';
-    this.panelContainer.setAttribute('data-theme', THEMES.DARK);
+    this.panelContainer.className = 'qursor-floating-panel';
+    this.panelContainer.setAttribute('data-theme', THEMES.LIGHT);
 
     this.panelContainer.innerHTML = `
-      <!-- Header -->
-      <div class="panel-header" id="panelHeader">
-        <div class="panel-title">
-          <span>⚡ Qursor++ AI</span>
-          <span id="panelTagBadge" style="font-size: 10px; background: var(--q-bg-primary); color: var(--q-text-accent); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--q-border);">SELECT AN ELEMENT</span>
+      <!-- Top Icon Navigation Header -->
+      <div class="qursor-icon-navbar" id="panelHeader">
+        <div class="navbar-icons-group">
+          ${QURSOR_NAV_TABS.map(tab => `
+            <button class="nav-icon-btn ${tab.id === this.activeTab ? 'active' : ''}" data-tab="${tab.id}" title="${tab.label}">
+              ${tab.icon}
+            </button>
+          `).join('')}
         </div>
-        <div class="header-actions">
-          <button class="panel-btn" id="themeToggleBtn" title="Toggle Light/Dark Theme">🌙</button>
-          <button class="panel-btn" id="panelCollapseBtn" title="Minimize / Expand Panel">_</button>
-          <button class="panel-btn" id="panelCloseBtn" title="Close Panel">✕</button>
+        <button class="nav-close-btn" id="panelCloseBtn" title="Close">✕</button>
+      </div>
+
+      <!-- Sub-Header Trigger / Search Bar -->
+      <div class="qursor-trigger-bar" id="triggerBar">
+        <div class="trigger-input-pill">
+          <span>Aa</span>
+          <span>Pick font</span>
         </div>
       </div>
 
-      <!-- Navigation Tabs -->
-      <div class="panel-tabs" id="panelTabs">
-        ${PANEL_TABS.map(tab => `
-          <button class="tab-btn ${tab.id === this.activeTab ? 'active' : ''}" data-tab="${tab.id}">
-            <span>${tab.icon}</span>
-            <span>${tab.label}</span>
-          </button>
-        `).join('')}
-      </div>
-
-      <!-- Body Content -->
-      <div class="panel-body" id="panelBody">
-        <div class="empty-state">
-          <span style="font-size: 32px;">🎯</span>
-          <div>
-            <div style="font-weight: 700; color: var(--q-text-primary); font-size: 13px;">No Element Selected</div>
-            <div style="font-size: 11px; margin-top: 4px;">Click any element on the webpage to inspect telemetry, styles, component code, and AI prompts.</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Action Toolbar -->
-      <div class="panel-toolbar" id="panelToolbar">
-        <div class="toolbar-left">
-          <button class="copy-btn" data-action="copy-selector">📋 Selector</button>
-          <button class="copy-btn" data-action="copy-xpath">📍 XPath</button>
-          <button class="copy-btn" data-action="copy-html">〈/〉 HTML</button>
-          <button class="copy-btn" data-action="copy-css">🎨 CSS</button>
-        </div>
-        <div class="toolbar-right">
-          <button class="copy-btn copy-btn-primary" data-action="copy-component">⚛️ Component</button>
-          <button class="copy-btn copy-btn-primary" data-action="generate-prompt">✨ AI Prompt</button>
-        </div>
+      <!-- Main Body Container -->
+      <div class="qursor-panel-body" id="panelBody">
+        <!-- Rendered dynamically -->
       </div>
     `;
 
@@ -447,20 +399,14 @@ export class InspectorPanel {
     this.setupEventListeners();
   }
 
-  /**
-   * Sets up drag handles, tabs switching, copy actions, and theme toggling
-   */
   setupEventListeners() {
     const header = this.panelContainer.querySelector('#panelHeader');
-    const collapseBtn = this.panelContainer.querySelector('#panelCollapseBtn');
     const closeBtn = this.panelContainer.querySelector('#panelCloseBtn');
-    const themeToggleBtn = this.panelContainer.querySelector('#themeToggleBtn');
-    const tabsContainer = this.panelContainer.querySelector('#panelTabs');
-    const toolbar = this.panelContainer.querySelector('#panelToolbar');
+    const navGroup = this.panelContainer.querySelector('.navbar-icons-group');
 
     // Dragging Logic
     header.addEventListener('mousedown', (e) => {
-      if (e.target.closest('.panel-btn')) return;
+      if (e.target.closest('.nav-icon-btn') || e.target.closest('.nav-close-btn')) return;
       this.isDragging = true;
       const rect = this.panelContainer.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
@@ -481,179 +427,82 @@ export class InspectorPanel {
       this.isDragging = false;
     });
 
-    // Theme Toggle
-    themeToggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const newTheme = this.themeManager.toggleTheme();
-      themeToggleBtn.textContent = newTheme === THEMES.DARK ? '🌙' : '☀️';
-      this.toastManager.show(`Switched to ${newTheme.toUpperCase()} theme`, 'info');
-    });
-
-    // Collapse Panel
-    collapseBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.isCollapsed = !this.isCollapsed;
-      this.panelContainer.classList.toggle('collapsed', this.isCollapsed);
-      collapseBtn.textContent = this.isCollapsed ? '▢' : '_';
-    });
-
-    // Close Panel
+    // Close Button
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.hide();
       if (this.onClose) this.onClose();
     });
 
-    // Tabs Navigation Switch
-    tabsContainer.addEventListener('click', (e) => {
-      const tabBtn = e.target.closest('.tab-btn');
-      if (!tabBtn) return;
+    // Navigation Tab Switch
+    navGroup.addEventListener('click', (e) => {
+      const btn = e.target.closest('.nav-icon-btn');
+      if (!btn) return;
       e.stopPropagation();
 
-      const tabId = tabBtn.dataset.tab;
+      const tabId = btn.dataset.tab;
       this.activeTab = tabId;
 
-      tabsContainer.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabId);
+      navGroup.querySelectorAll('.nav-icon-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tabId);
       });
 
       this.renderTabContent();
     });
 
-    // Quick Copy Actions in Toolbar
-    toolbar.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.copy-btn');
-      if (!btn || !this.currentData) return;
-      e.stopPropagation();
-
-      const action = btn.dataset.action;
-      let textToCopy = '';
-      let toastMsg = '';
-
-      if (action === 'copy-selector') {
-        textToCopy = this.currentData.selector || '';
-        toastMsg = 'CSS Selector copied!';
-      } else if (action === 'copy-xpath') {
-        textToCopy = this.currentData.xpath || '';
-        toastMsg = 'XPath copied!';
-      } else if (action === 'copy-html') {
-        textToCopy = this.currentData.general.fullOuterHTML || '';
-        toastMsg = 'HTML Outer Snippet copied!';
-      } else if (action === 'copy-css') {
-        textToCopy = this.currentData.rawCss || '';
-        toastMsg = 'Computed CSS rules copied!';
-      } else if (action === 'copy-component') {
-        textToCopy = generateComponentCode(this.currentData, this.selectedFramework);
-        toastMsg = `${this.selectedFramework.toUpperCase()} Component code copied!`;
-      } else if (action === 'generate-prompt') {
-        this.activeTab = 'prompt';
-        this.updateTabButtons();
-        this.renderTabContent();
-        toastMsg = 'AI Prompt generated!';
-      }
-
-      if (textToCopy) {
-        await copyToClipboard(textToCopy);
-        this.toastManager.show(toastMsg, 'success');
-      }
-    });
-
-    // Interactive Delegated Handlers for Dynamic Content inside Panel Body
+    // Body Delegated Handlers
     const body = this.panelContainer.querySelector('#panelBody');
-    body.addEventListener('change', (e) => {
-      if (e.target.classList.contains('framework-select')) {
-        this.selectedFramework = e.target.value;
-        this.renderTabContent();
-      } else if (e.target.classList.contains('prompt-target-select')) {
-        this.promptFrameworkTarget = e.target.value;
-        this.editedPromptText = null;
-        this.renderTabContent();
-      }
-    });
-
-    body.addEventListener('input', (e) => {
-      if (e.target.classList.contains('prompt-editor-textarea')) {
-        this.editedPromptText = e.target.value;
-      }
-    });
-
     body.addEventListener('click', async (e) => {
-      const copyBtn = e.target.closest('.editor-copy-btn');
-      const downloadBtn = e.target.closest('.editor-download-btn');
-      const regenBtn = e.target.closest('.editor-regen-btn');
+      const segBtn = e.target.closest('.segment-btn');
+      const copyBtn = e.target.closest('.copy-action-trigger');
+      const downloadBtn = e.target.closest('.download-action-trigger');
+
+      if (segBtn) {
+        const segGroup = segBtn.dataset.segGroup;
+        const value = segBtn.dataset.segValue;
+        if (segGroup === 'codeSegment') this.codeSegment = value;
+        if (segGroup === 'codeScope') this.codeScope = value;
+        if (segGroup === 'codeStyles') this.codeStyles = value;
+        if (segGroup === 'assetSegment') this.assetSegment = value;
+        this.renderTabContent();
+      }
 
       if (copyBtn && this.currentData) {
-        const type = copyBtn.dataset.copyType;
-        const text = type === 'prompt' 
-          ? (this.editedPromptText || generateStructuredAiPrompt(this.currentData, this.promptFrameworkTarget))
-          : generateComponentCode(this.currentData, this.selectedFramework);
-
-        await copyToClipboard(text);
-        this.toastManager.show(`✓ Copied to clipboard!`, 'success');
+        const text = copyBtn.dataset.copyText;
+        if (text) {
+          await copyToClipboard(text);
+          this.toastManager.show('✓ Copied to clipboard!', 'success');
+        }
       }
 
       if (downloadBtn && this.currentData) {
-        const type = downloadBtn.dataset.downloadType;
-        const isPrompt = type === 'prompt';
-        const content = isPrompt 
-          ? (this.editedPromptText || generateStructuredAiPrompt(this.currentData, this.promptFrameworkTarget))
-          : generateComponentCode(this.currentData, this.selectedFramework);
-        
-        const ext = isPrompt ? 'md' : (this.selectedFramework === FRAMEWORKS.REACT ? 'jsx' : (this.selectedFramework === FRAMEWORKS.VUE ? 'vue' : 'html'));
-        const filename = `${this.currentData.tag.toLowerCase()}_component.${ext}`;
-
-        this.downloadFile(content, filename);
-        this.toastManager.show(`✓ Downloaded ${filename}`, 'success');
-      }
-
-      if (regenBtn) {
-        this.editedPromptText = null;
-        this.renderTabContent();
-        this.toastManager.show(`Regenerated AI Prompt!`, 'info');
+        const content = generateComponentCode(this.currentData, FRAMEWORKS.REACT);
+        this.downloadFile(content, `${this.currentData.tag.toLowerCase()}_component.jsx`);
+        this.toastManager.show('✓ Downloaded component file', 'success');
       }
     });
   }
 
-  updateTabButtons() {
-    const tabsContainer = this.panelContainer.querySelector('#panelTabs');
-    tabsContainer.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tab === this.activeTab);
-    });
-  }
-
-  /**
-   * Updates panel payload with newly inspected element telemetry
-   * @param {Object} data 
-   */
   updateData(data) {
     this.currentData = data;
     this.editedPromptText = null;
     if (!data) return;
-
-    const badge = this.panelContainer.querySelector('#panelTagBadge');
-    if (badge) {
-      badge.textContent = `<${data.tag}> ${data.widthPx}×${data.heightPx}px`;
-    }
-
     this.show();
     this.renderTabContent();
   }
 
-  /**
-   * Renders tab content body depending on currently active tab
-   */
   renderTabContent() {
+    const triggerBar = this.panelContainer.querySelector('#triggerBar');
     const body = this.panelContainer.querySelector('#panelBody');
-    if (!body) return;
+    if (!body || !triggerBar) return;
 
     if (!this.currentData) {
+      triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🔍 Select an element on the webpage</span></div>`;
       body.innerHTML = `
-        <div class="empty-state">
-          <span style="font-size: 32px;">🎯</span>
-          <div>
-            <div style="font-weight: 700; color: var(--q-text-primary); font-size: 13px;">No Element Selected</div>
-            <div style="font-size: 11px; margin-top: 4px;">Click any element on the webpage to inspect telemetry, styles, component code, and AI prompts.</div>
-          </div>
+        <div style="text-align:center; padding:32px 16px; color:var(--q-text-muted);">
+          <div style="font-size:32px;">🎯</div>
+          <div style="font-weight:700; margin-top:8px; color:var(--q-text-primary);">No Element Selected</div>
+          <div style="font-size:11px; margin-top:4px;">Click any element to inspect typography, colors, assets, code, or prompts.</div>
         </div>
       `;
       return;
@@ -662,198 +511,253 @@ export class InspectorPanel {
     const d = this.currentData;
 
     switch (this.activeTab) {
-      case 'overview': {
-        body.innerHTML = `
-          <div class="data-row"><span class="data-label">Tag Name</span><span class="data-value">&lt;${d.general.tagName}&gt;</span></div>
-          <div class="data-row"><span class="data-label">Element ID</span><span class="data-value">${d.general.id}</span></div>
-          <div class="data-row"><span class="data-label">CSS Classes</span><span class="data-value">${d.classes.length ? d.classes.join(', ') : 'None'}</span></div>
-          <div class="data-row"><span class="data-label">ARAI Role</span><span class="data-value">${d.general.role}</span></div>
-          <div class="data-row"><span class="data-label">Accessible Name</span><span class="data-value">${d.general.accessibleName || 'N/A'}</span></div>
-          <div class="data-row"><span class="data-label">Text Content</span><span class="data-value">${d.general.textContent || 'None'}</span></div>
-          <div class="data-row"><span class="data-label">Value / Input</span><span class="data-value">${d.general.value}</span></div>
-          <div class="data-row"><span class="data-label">Tab Index</span><span class="data-value">${d.general.tabIndex}</span></div>
-          <div class="data-row"><span class="data-label">Disabled State</span><span class="data-value">${d.general.disabled ? 'Yes' : 'No'}</span></div>
-          <div class="data-row"><span class="data-label">Visibility</span><span class="data-value">${d.general.hidden ? 'Hidden' : 'Visible'}</span></div>
-        `;
-        break;
-      }
-
-      case 'styles': {
-        body.innerHTML = `
-          <div style="font-size:11px; font-weight:700; color:var(--q-text-accent); margin-bottom:4px;">Computed CSS Rules</div>
-          <div class="code-editor" style="min-height:300px;">${escapeHtml(d.rawCss || '/* No rules extracted */')}</div>
-        `;
-        break;
-      }
-
-      case 'layout': {
-        body.innerHTML = `
-          <div class="data-row"><span class="data-label">Dimensions</span><span class="data-value">${d.widthPx}px × ${d.heightPx}px</span></div>
-          <div class="data-row"><span class="data-label">Display</span><span class="data-value">${d.layout.display}</span></div>
-          <div class="data-row"><span class="data-label">Position</span><span class="data-value">${d.layout.position}</span></div>
-          <div class="data-row"><span class="data-label">Top / Left</span><span class="data-value">${d.layout.top} / ${d.layout.left}</span></div>
-          <div class="data-row"><span class="data-label">Right / Bottom</span><span class="data-value">${d.layout.right} / ${d.layout.bottom}</span></div>
-          <div class="data-row"><span class="data-label">Z-Index</span><span class="data-value">${d.layout.zIndex}</span></div>
-          <div class="data-row"><span class="data-label">Overflow</span><span class="data-value">${d.layout.overflow}</span></div>
-        `;
-        break;
-      }
-
       case 'typography': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>Aa</span> <span>Pick font</span></div>`;
         body.innerHTML = `
-          <div class="data-row"><span class="data-label">Font Family</span><span class="data-value">${d.typography.fontFamily}</span></div>
-          <div class="data-row"><span class="data-label">Font Size</span><span class="data-value">${d.typography.fontSize}</span></div>
-          <div class="data-row"><span class="data-label">Font Weight</span><span class="data-value">${d.typography.fontWeight}</span></div>
-          <div class="data-row"><span class="data-label">Line Height</span><span class="data-value">${d.typography.lineHeight}</span></div>
-          <div class="data-row"><span class="data-label">Letter Spacing</span><span class="data-value">${d.typography.letterSpacing}</span></div>
-          <div class="data-row"><span class="data-label">Text Align</span><span class="data-value">${d.typography.textAlign}</span></div>
-          <div class="data-row"><span class="data-label">Text Transform</span><span class="data-value">${d.typography.textTransform}</span></div>
+          <div class="section-label-row">
+            <span>SELECTED ELEMENT</span>
+            <span class="node-badge">1</span>
+          </div>
+
+          <div class="qursor-card">
+            <div class="specimen-title">${d.tag.charAt(0) + d.tag.slice(1).toLowerCase()}</div>
+            <div class="specimen-preview-box" style="font-family:${d.typography.fontFamily}; font-size:18px; font-weight:${d.typography.fontWeight}; line-height:${d.typography.lineHeight};">
+              AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz
+            </div>
+
+            <div class="prop-grid">
+              <div class="prop-row"><span class="prop-label">Font family</span><span class="prop-value">${d.typography.fontFamily.split(',')[0].replace(/['"]/g, '')}</span></div>
+              <div class="prop-row"><span class="prop-label">Font size</span><span class="prop-value">${d.typography.fontSize}</span></div>
+              <div class="prop-row">
+                <span class="prop-label">Text color</span>
+                <span class="prop-value copy-action-trigger" data-copy-text="${d.colors.color}" style="cursor:pointer;" title="Click to copy color">
+                  <span class="swatch-mini" style="background:${d.colors.color};"></span>
+                  ${rgbToHex(d.colors.color) || d.colors.color} 📋
+                </span>
+              </div>
+              <div class="prop-row"><span class="prop-label">Weight</span><span class="prop-value">${d.typography.fontWeight}</span></div>
+              <div class="prop-row"><span class="prop-label">Line height</span><span class="prop-value">${d.typography.lineHeight}</span></div>
+              <div class="prop-row">
+                <span class="prop-label">Contrast</span>
+                <span class="contrast-badge">• Good 6.33:1</span>
+              </div>
+            </div>
+          </div>
         `;
         break;
       }
 
       case 'colors': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🎨</span> <span>Pick color</span></div>`;
+        const hex = rgbToHex(d.colors.color) || '#000000';
+        const bgHex = rgbToHex(d.colors.backgroundColor) || '#FFFFFF';
+
         body.innerHTML = `
-          <div class="data-row">
-            <span class="data-label">Text Color</span>
-            <span class="data-value"><span class="color-swatch" style="background:${d.colors.color};"></span>${d.colors.color}</span>
+          <div class="section-label-row">
+            <span>SELECTED COLORS</span>
+            <span class="node-badge">1</span>
           </div>
-          <div class="data-row">
-            <span class="data-label">Background</span>
-            <span class="data-value"><span class="color-swatch" style="background:${d.colors.backgroundColor};"></span>${d.colors.backgroundColor}</span>
+
+          <div class="qursor-card">
+            <div class="prop-row">
+              <span style="display:flex; align-items:center; gap:6px; font-weight:700;">
+                <span class="swatch-mini" style="background:${hex}; width:14px; height:14px;"></span>
+                fill
+              </span>
+              <span class="prop-value copy-action-trigger" data-copy-text="${hex}" style="cursor:pointer;">${hex} 📋</span>
+            </div>
+            <div class="prop-grid" style="margin-top:6px;">
+              <div class="prop-row"><span class="prop-label">HEX</span><span class="prop-value copy-action-trigger" data-copy-text="${hex}">${hex} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">RGB</span><span class="prop-value copy-action-trigger" data-copy-text="${d.colors.color}">${d.colors.color} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">RGBA</span><span class="prop-value copy-action-trigger" data-copy-text="${d.colors.color}">${d.colors.color} 📋</span></div>
+            </div>
           </div>
-          <div class="data-row">
-            <span class="data-label">Border Color</span>
-            <span class="data-value"><span class="color-swatch" style="background:${d.border.borderColor};"></span>${d.border.borderColor}</span>
+
+          <div class="qursor-card">
+            <div class="prop-row">
+              <span style="display:flex; align-items:center; gap:6px; font-weight:700;">
+                <span class="swatch-mini" style="background:${bgHex}; width:14px; height:14px;"></span>
+                background
+              </span>
+              <span class="prop-value copy-action-trigger" data-copy-text="${bgHex}" style="cursor:pointer;">${bgHex} 📋</span>
+            </div>
           </div>
-          <div class="data-row"><span class="data-label">Box Shadow</span><span class="data-value">${d.colors.boxShadow}</span></div>
-          <div class="data-row"><span class="data-label">Opacity</span><span class="data-value">${d.colors.opacity}</span></div>
         `;
         break;
       }
 
-      case 'spacing': {
+      case 'assets': {
+        triggerBar.innerHTML = `
+          <div class="segment-pill-container">
+            <button class="segment-btn ${this.assetSegment === 'By Type' ? 'active' : ''}" data-seg-group="assetSegment" data-seg-value="By Type">By Type</button>
+            <button class="segment-btn ${this.assetSegment === 'All' ? 'active' : ''}" data-seg-group="assetSegment" data-seg-value="All">All</button>
+          </div>
+        `;
+
         body.innerHTML = `
-          <div class="spacing-diagram">
-            <div class="margin-box">
-              <div>MARGIN: ${d.spacing.margin}</div>
-              <div class="padding-box">
-                <div>PADDING: ${d.spacing.padding}</div>
-                <div class="element-box">&lt;${d.tag}&gt; ${d.widthPx}×${d.heightPx}</div>
+          <div class="section-label-row">
+            <span>ASSETS 1</span>
+            <span class="node-badge">1</span>
+          </div>
+
+          <div class="qursor-card">
+            <div style="font-weight:700; font-size:12px;">${d.tag.toLowerCase()}</div>
+            <div class="asset-preview-card">
+              ${d.specialDetails.type === 'IMAGE' 
+                ? `<img src="${d.specialDetails.imageUrl}" style="max-height:80px; max-width:80%; object-fit:contain;" />` 
+                : `<span style="font-size:36px;">✉️</span>`}
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">inline-svg</span>
+              <span class="prop-value"><span class="swatch-mini" style="background:#000000;"></span> #000000</span>
+            </div>
+            <div class="prop-row" style="font-size:10px; color:var(--q-text-muted);">
+              <span>SVG • ${d.general.fullOuterHTML ? d.general.fullOuterHTML.length : 120} B • ${d.widthPx}×${d.heightPx}</span>
+            </div>
+            <div class="asset-action-bar">
+              <label style="font-size:10px; display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" /> Select</label>
+              <div style="display:flex; gap:4px;">
+                <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(d.general.fullOuterHTML)}" title="Copy SVG">📋</button>
+                <button class="icon-action-btn download-action-trigger" title="Download Asset">↓</button>
               </div>
             </div>
           </div>
-          <div class="data-row"><span class="data-label">Margin (TRBL)</span><span class="data-value">${d.spacing.margin}</span></div>
-          <div class="data-row"><span class="data-label">Padding (TRBL)</span><span class="data-value">${d.spacing.padding}</span></div>
-          <div class="data-row"><span class="data-label">Gap</span><span class="data-value">${d.flexGrid.gap || '0px'}</span></div>
         `;
         break;
       }
 
-      case 'border': {
-        body.innerHTML = `
-          <div class="data-row"><span class="data-label">Border Width</span><span class="data-value">${d.border.borderWidth}</span></div>
-          <div class="data-row"><span class="data-label">Border Style</span><span class="data-value">${d.border.borderStyle}</span></div>
-          <div class="data-row">
-            <span class="data-label">Border Color</span>
-            <span class="data-value"><span class="color-swatch" style="background:${d.border.borderColor};"></span>${d.border.borderColor}</span>
+      case 'code': {
+        triggerBar.innerHTML = `
+          <div class="segment-pill-container">
+            <button class="segment-btn ${this.codeSegment === 'HTML + CSS' ? 'active' : ''}" data-seg-group="codeSegment" data-seg-value="HTML + CSS">HTML + CSS</button>
+            <button class="segment-btn ${this.codeSegment === 'JSX' ? 'active' : ''}" data-seg-group="codeSegment" data-seg-value="JSX">JSX</button>
           </div>
-          <div class="data-row"><span class="data-label">Border Radius</span><span class="data-value">${d.border.borderRadius}</span></div>
         `;
-        break;
-      }
 
-      case 'flex': {
-        body.innerHTML = `
-          <div class="data-row"><span class="data-label">Flex Direction</span><span class="data-value">${d.flexGrid.flexDirection}</span></div>
-          <div class="data-row"><span class="data-label">Flex Wrap</span><span class="data-value">${d.flexGrid.flexWrap}</span></div>
-          <div class="data-row"><span class="data-label">Justify Content</span><span class="data-value">${d.flexGrid.justifyContent}</span></div>
-          <div class="data-row"><span class="data-label">Align Items</span><span class="data-value">${d.flexGrid.alignItems}</span></div>
-          <div class="data-row"><span class="data-label">Gap</span><span class="data-value">${d.flexGrid.gap}</span></div>
-          <div class="data-row"><span class="data-label">Grid Columns</span><span class="data-value">${d.flexGrid.gridTemplateColumns}</span></div>
-          <div class="data-row"><span class="data-label">Grid Rows</span><span class="data-value">${d.flexGrid.gridTemplateRows}</span></div>
-        `;
-        break;
-      }
+        const codeText = this.codeSegment === 'JSX' 
+          ? generateComponentCode(d, FRAMEWORKS.REACT) 
+          : d.general.fullOuterHTML;
 
-      case 'dom': {
         body.innerHTML = `
-          <div class="data-row"><span class="data-label">Parent Element</span><span class="data-value">&lt;${d.dom.parentTag || 'N/A'}&gt;</span></div>
-          <div class="data-row"><span class="data-label">Child Count</span><span class="data-value">${d.dom.childCount}</span></div>
-          <div class="data-row"><span class="data-label">DOM Tree Depth</span><span class="data-value">${d.dom.depth}</span></div>
-          <div class="data-row"><span class="data-label">CSS Selector Path</span><span class="data-value">${d.selector}</span></div>
-          <div class="data-row"><span class="data-label">XPath Location</span><span class="data-value">${d.xpath}</span></div>
-        `;
-        break;
-      }
-
-      case 'accessibility': {
-        body.innerHTML = `
-          <div class="data-row"><span class="data-label">WAI-ARIA Role</span><span class="data-value">${d.general.role}</span></div>
-          <div class="data-row"><span class="data-label">Accessible Name</span><span class="data-value">${d.general.accessibleName || 'N/A'}</span></div>
-          <div class="data-row"><span class="data-label">Tab Index</span><span class="data-value">${d.general.tabIndex}</span></div>
-          <div class="data-row"><span class="data-label">Disabled</span><span class="data-value">${d.general.disabled ? 'True' : 'False'}</span></div>
-          <div class="data-row"><span class="data-label">ARIA Attributes</span><span class="data-value">${Object.keys(d.general.ariaAttributes || {}).length ? JSON.stringify(d.general.ariaAttributes) : 'None'}</span></div>
-        `;
-        break;
-      }
-
-      case 'component': {
-        const code = generateComponentCode(d, this.selectedFramework);
-        body.innerHTML = `
-          <div class="editor-container">
-            <div class="editor-toolbar">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:11px; font-weight:700; color:var(--q-text-accent);">Framework:</span>
-                <select class="framework-select">
-                  <option value="${FRAMEWORKS.REACT}" ${this.selectedFramework === FRAMEWORKS.REACT ? 'selected' : ''}>React (JSX)</option>
-                  <option value="${FRAMEWORKS.VUE}" ${this.selectedFramework === FRAMEWORKS.VUE ? 'selected' : ''}>Vue 3 SFC</option>
-                  <option value="${FRAMEWORKS.ANGULAR}" ${this.selectedFramework === FRAMEWORKS.ANGULAR ? 'selected' : ''}>Angular Component</option>
-                  <option value="${FRAMEWORKS.TAILWIND}" ${this.selectedFramework === FRAMEWORKS.TAILWIND ? 'selected' : ''}>Tailwind CSS HTML</option>
-                  <option value="${FRAMEWORKS.VANILLA}" ${this.selectedFramework === FRAMEWORKS.VANILLA ? 'selected' : ''}>Vanilla HTML/CSS/JS</option>
-                  <option value="${FRAMEWORKS.HTML}" ${this.selectedFramework === FRAMEWORKS.HTML ? 'selected' : ''}>Clean HTML</option>
-                  <option value="${FRAMEWORKS.CSS}" ${this.selectedFramework === FRAMEWORKS.CSS ? 'selected' : ''}>Computed CSS</option>
-                </select>
-              </div>
-              <div style="display:flex; gap:6px;">
-                <button class="copy-btn editor-copy-btn" data-copy-type="component">📋 Copy Code</button>
-                <button class="copy-btn editor-download-btn" data-download-type="component">💾 Download</button>
+          <div class="qursor-card">
+            <div class="prop-row">
+              <span class="prop-label">Scope</span>
+              <div class="segment-pill-container" style="width:160px;">
+                <button class="segment-btn ${this.codeScope === 'Selected' ? 'active' : ''}" data-seg-group="codeScope" data-seg-value="Selected">Selected</button>
+                <button class="segment-btn ${this.codeScope === 'Full Page' ? 'active' : ''}" data-seg-group="codeScope" data-seg-value="Full Page">Full Page</button>
               </div>
             </div>
-            <textarea class="code-editor" readonly>${escapeHtml(code)}</textarea>
+            <div class="prop-row">
+              <span class="prop-label">Styles</span>
+              <div class="segment-pill-container" style="width:160px;">
+                <button class="segment-btn ${this.codeStyles === 'Computed' ? 'active' : ''}" data-seg-group="codeStyles" data-seg-value="Computed">Computed</button>
+                <button class="segment-btn ${this.codeStyles === 'Classes' ? 'active' : ''}" data-seg-group="codeStyles" data-seg-value="Classes">Classes</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="qursor-card">
+            <div class="prop-row" style="font-size:10px; color:var(--q-text-muted);">
+              <span>${d.widthPx}×${d.heightPx} • ${d.dom.childCount || 1} nodes • ${d.classes.length || 12} rules</span>
+              <div style="display:flex; gap:4px;">
+                <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(codeText)}" title="Copy Code">📋</button>
+                <button class="icon-action-btn download-action-trigger" title="Download File">↓</button>
+              </div>
+            </div>
+            <textarea style="width:100%; min-height:140px; background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:8px; font-family:monospace; font-size:10px; outline:none;" readonly>${escapeHtml(codeText)}</textarea>
+          </div>
+        `;
+        break;
+      }
+
+      case 'edit': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>▾ link: "${d.tag.toLowerCase()}"</span></div>`;
+        const hex = rgbToHex(d.colors.color) || '#ffffff';
+        const bgHex = rgbToHex(d.colors.backgroundColor) || '#000000';
+
+        body.innerHTML = `
+          <div class="qursor-card">
+            <div class="edit-prop-row">
+              <span class="prop-label">color:</span>
+              <input type="text" class="edit-prop-input" value="${hex}" />
+            </div>
+            <div class="edit-prop-row">
+              <span class="prop-label">background-color:</span>
+              <input type="text" class="edit-prop-input" value="${bgHex}" />
+            </div>
+            <div class="edit-prop-row">
+              <span class="prop-label">font-size:</span>
+              <input type="text" class="edit-prop-input" value="${d.typography.fontSize}" />
+            </div>
+            <div class="edit-prop-row">
+              <span class="prop-label">font-weight:</span>
+              <input type="text" class="edit-prop-input" value="${d.typography.fontWeight}" />
+            </div>
+          </div>
+
+          <div class="qursor-card">
+            <textarea class="comment-textarea" placeholder="What should change ?"></textarea>
+            <div class="comment-btn-group">
+              <button class="q-btn">Cancel</button>
+              <button class="q-btn q-btn-primary">Add</button>
+            </div>
           </div>
         `;
         break;
       }
 
       case 'prompt': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>👤 AI Prompt Generator</span></div>`;
         const promptContent = this.editedPromptText || generateStructuredAiPrompt(d, this.promptFrameworkTarget);
+
         body.innerHTML = `
-          <div class="editor-container">
-            <div class="editor-toolbar">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:11px; font-weight:700; color:var(--q-text-accent);">Target Framework:</span>
-                <select class="framework-select prompt-target-select">
-                  <option value="React" ${this.promptFrameworkTarget === 'React' ? 'selected' : ''}>React</option>
-                  <option value="Next.js" ${this.promptFrameworkTarget === 'Next.js' ? 'selected' : ''}>Next.js</option>
-                  <option value="Vue 3" ${this.promptFrameworkTarget === 'Vue 3' ? 'selected' : ''}>Vue 3</option>
-                  <option value="Angular" ${this.promptFrameworkTarget === 'Angular' ? 'selected' : ''}>Angular</option>
-                  <option value="Tailwind CSS" ${this.promptFrameworkTarget === 'Tailwind CSS' ? 'selected' : ''}>Tailwind CSS</option>
-                  <option value="HTML/CSS" ${this.promptFrameworkTarget === 'HTML/CSS' ? 'selected' : ''}>Vanilla HTML/CSS</option>
-                </select>
-              </div>
-              <div style="display:flex; gap:6px;">
-                <button class="copy-btn editor-regen-btn" title="Reset and Regenerate Prompt">🔄 Reset</button>
-                <button class="copy-btn editor-copy-btn" data-copy-type="prompt">📋 Copy Prompt</button>
-                <button class="copy-btn editor-download-btn" data-download-type="prompt">💾 Download .md</button>
-              </div>
+          <div class="qursor-card">
+            <div class="prop-row">
+              <span class="prop-label">Target Framework</span>
+              <select style="background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:4px; padding:3px 6px; font-size:10px;" onchange="this.getRootNode().host._panel.promptFrameworkTarget = this.value; this.getRootNode().host._panel.renderTabContent();">
+                <option value="React" ${this.promptFrameworkTarget === 'React' ? 'selected' : ''}>React</option>
+                <option value="Next.js" ${this.promptFrameworkTarget === 'Next.js' ? 'selected' : ''}>Next.js</option>
+                <option value="Vue 3" ${this.promptFrameworkTarget === 'Vue 3' ? 'selected' : ''}>Vue 3</option>
+                <option value="Angular" ${this.promptFrameworkTarget === 'Angular' ? 'selected' : ''}>Angular</option>
+                <option value="Tailwind CSS" ${this.promptFrameworkTarget === 'Tailwind CSS' ? 'selected' : ''}>Tailwind CSS</option>
+              </select>
             </div>
-            <textarea class="code-editor prompt-editor-textarea" style="white-space:pre-wrap;">${escapeHtml(promptContent)}</textarea>
+          </div>
+
+          <div class="qursor-card">
+            <textarea style="width:100%; min-height:160px; background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:8px; font-family:monospace; font-size:10px; outline:none; white-space:pre-wrap;">${escapeHtml(promptContent)}</textarea>
+            <div class="comment-btn-group">
+              <button class="q-btn copy-action-trigger" data-copy-text="${escapeHtml(promptContent)}">📋 Copy Prompt</button>
+            </div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'settings': {
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>⚙️ Qursor Settings</span></div>`;
+        body.innerHTML = `
+          <div class="qursor-card">
+            <div class="prop-row">
+              <span class="prop-label">Theme Mode</span>
+              <button class="q-btn" onclick="this.getRootNode().host._panel.themeManager.toggleTheme();">Toggle Light/Dark</button>
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">Shortcut Toggle</span>
+              <span class="prop-value">Ctrl + Shift + I</span>
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">Exit Inspect</span>
+              <span class="prop-value">ESC</span>
+            </div>
           </div>
         `;
         break;
       }
     }
+
+    // Attach reference for inline onclick triggers
+    this.shadowRoot._panel = this;
   }
 
   downloadFile(content, filename) {
@@ -885,4 +789,17 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function rgbToHex(colorStr) {
+  if (!colorStr) return '';
+  if (colorStr.startsWith('#')) return colorStr;
+  const match = colorStr.match(/\d+/g);
+  if (match && match.length >= 3) {
+    const r = parseInt(match[0], 10).toString(16).padStart(2, '0').toUpperCase();
+    const g = parseInt(match[1], 10).toString(16).padStart(2, '0').toUpperCase();
+    const b = parseInt(match[2], 10).toString(16).padStart(2, '0').toUpperCase();
+    return `#${r}${g}${b}`;
+  }
+  return '';
 }

@@ -1,30 +1,28 @@
-/* Qursor++ AI - Popup Styles */
+/* Qursor++ - Popup Styles (Exact Qursor Replica) */
 
-:root, [data-theme="dark"] {
-  --bg-primary: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-surface-elevated: #334155;
-  --border-color: #334155;
-  --accent-cyan: #38bdf8;
-  --accent-blue: #3b82f6;
-  --accent-green: #10b981;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --shadow-glow: 0 4px 20px -2px rgba(56, 189, 248, 0.25);
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+:root, [data-theme="light"] {
+  --bg-primary: #f5f5f7;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #e8e8ed;
+  --border-color: #e5e5ea;
+  --accent-blue: #2563eb;
+  --accent-green: #34c759;
+  --text-main: #1d1d1f;
+  --text-muted: #86868b;
+  --shadow-glow: 0 4px 16px rgba(37, 99, 235, 0.25);
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
 }
 
-[data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-surface: #f8fafc;
-  --bg-surface-elevated: #f1f5f9;
-  --border-color: #e2e8f0;
-  --accent-cyan: #0284c7;
-  --accent-blue: #2563eb;
-  --accent-green: #059669;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --shadow-glow: 0 4px 15px -2px rgba(2, 132, 199, 0.2);
+[data-theme="dark"] {
+  --bg-primary: #161618;
+  --bg-surface: #242426;
+  --bg-surface-elevated: #2c2c2e;
+  --border-color: #3a3a3c;
+  --accent-blue: #3b82f6;
+  --accent-green: #30d158;
+  --text-main: #f5f5f7;
+  --text-muted: #8e8e93;
+  --shadow-glow: 0 4px 20px rgba(59, 130, 246, 0.3);
 }
 
 * {
@@ -38,7 +36,7 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-main);
   font-family: var(--font-family);
-  font-size: 13px;
+  font-size: 12px;
   user-select: none;
   overflow: hidden;
   transition: background-color 0.2s, color 0.2s;
@@ -67,9 +65,9 @@ body {
 }
 
 .logo {
-  width: 32px;
-  height: 32px;
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4));
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 0 6px rgba(37, 99, 235, 0.3));
 }
 
 .title-container {
@@ -84,13 +82,6 @@ body {
   letter-spacing: -0.2px;
 }
 
-.badge-ai {
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
-}
-
 .version-tag {
   font-size: 10px;
   color: var(--text-muted);
@@ -99,9 +90,9 @@ body {
 /* Theme Switcher */
 .theme-switcher {
   display: flex;
-  background: var(--bg-surface);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 2px;
   gap: 2px;
 }
@@ -111,7 +102,7 @@ body {
   border: none;
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -121,8 +112,9 @@ body {
 }
 
 .theme-btn.active {
-  background: var(--accent-cyan);
-  color: #0f172a;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 /* Main Content */
@@ -140,7 +132,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   transition: all 0.3s ease;
 }
 
@@ -149,25 +141,24 @@ body {
   height: 10px;
   border-radius: 50%;
   background-color: var(--text-muted);
-  box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.4);
   transition: all 0.3s ease;
 }
 
 .status-card.active {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(37, 99, 235, 0.4);
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .status-card.active .status-indicator {
-  background-color: var(--accent-green);
-  box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.5);
-  animation: pulse-green 2s infinite;
+  background-color: var(--accent-blue);
+  box-shadow: 0 0 10px 2px rgba(37, 99, 235, 0.5);
+  animation: pulse-blue 2s infinite;
 }
 
-@keyframes pulse-green {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+@keyframes pulse-blue {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
 }
 
 .status-info {
@@ -180,10 +171,11 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
+  font-weight: 700;
 }
 
 .status-text {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -195,7 +187,7 @@ body {
 .btn {
   width: 100%;
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
   font-family: inherit;
   font-size: 13px;
@@ -205,31 +197,30 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  background: var(--accent-blue);
   color: #ffffff;
   box-shadow: var(--shadow-glow);
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
   filter: brightness(1.1);
+  transform: translateY(-1px);
 }
 
 .btn-active {
-  background: #ef4444;
+  background: #ff3b30;
   color: #ffffff;
-  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
 }
 
 /* Shortcuts Card */
 .shortcuts-card {
   background: var(--bg-surface);
   border: 1px dashed var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -245,16 +236,18 @@ body {
 .shortcut-label {
   font-size: 11px;
   color: var(--text-muted);
+  font-weight: 500;
 }
 
 .shortcut-key {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 2px 6px;
-  font-family: monospace;
+  font-family: SFMono-Regular, Consolas, monospace;
   font-size: 10px;
-  color: var(--accent-cyan);
+  color: var(--accent-blue);
+  font-weight: 600;
 }
 
 /* Feature Badges Row */
@@ -266,10 +259,10 @@ body {
 }
 
 .f-badge {
-  background: var(--bg-surface-elevated);
+  background: var(--bg-surface);
   color: var(--text-muted);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 2px 6px;
   font-size: 10px;
   font-weight: 600;
@@ -291,8 +284,9 @@ body {
   font-size: 11px;
   cursor: pointer;
   transition: color 0.2s;
+  font-weight: 500;
 }
 
 .btn-link:hover {
-  color: var(--accent-cyan);
+  color: var(--accent-blue);
 }

@@ -1,8 +1,8 @@
 /**
- * Qursor++ - Visual Overlay Engine
+ * Qursor++ - Visual Overlay Engine (100% Qursor Replica)
  * 
- * Manages hover bounding box highlights and selection indicators.
- * Uses Shadow DOM to ensure zero style leakage between host site and extension UI.
+ * Manages hover bounding box highlights, selection box with blue numbered badge '1',
+ * and hover details inspector tooltip cards.
  */
 
 import { OVERLAY_STYLES } from '../utils/constants.js';
@@ -14,6 +14,7 @@ export class InspectorOverlay {
     this.shadowRoot = null;
     this.hoverBox = null;
     this.selectedBox = null;
+    this.selectedBadge = null;
     this.tooltip = null;
     this.activeElement = null;
     this.selectedElement = null;
@@ -58,45 +59,100 @@ export class InspectorOverlay {
         box-sizing: border-box;
         transition: all 0.05s ease-out;
         z-index: ${OVERLAY_STYLES.Z_INDEX};
-        border-radius: 3px;
+        border-radius: 4px;
       }
 
       .hover-box {
-        border: var(--q-overlay-hover-border, 2px solid #38bdf8);
-        background: var(--q-overlay-hover-bg, rgba(56, 189, 248, 0.15));
-        box-shadow: var(--q-overlay-hover-shadow, 0 0 10px rgba(56, 189, 248, 0.4));
+        border: var(--q-overlay-hover-border, 2px solid #2563eb);
+        background: var(--q-overlay-hover-bg, rgba(37, 99, 235, 0.12));
+        box-shadow: var(--q-overlay-hover-shadow);
       }
 
       .selected-box {
         position: absolute;
-        border: var(--q-overlay-select-border, 2px solid #10b981);
-        background: var(--q-overlay-select-bg, rgba(16, 185, 129, 0.15));
-        box-shadow: var(--q-overlay-select-shadow, 0 0 12px rgba(16, 185, 129, 0.5));
+        border: var(--q-overlay-select-border, 2px solid #2563eb);
+        background: var(--q-overlay-select-bg, rgba(37, 99, 235, 0.12));
+        box-shadow: var(--q-overlay-select-shadow);
       }
 
-      .inspector-tooltip {
+      .selected-badge-num {
+        position: absolute;
+        top: -11px;
+        right: -11px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #2563eb;
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5);
+        pointer-events: none;
+        z-index: ${OVERLAY_STYLES.Z_INDEX + 2};
+      }
+
+      /* Qursor Hover Inspector Card */
+      .inspector-tooltip-card {
         position: fixed;
         pointer-events: none;
-        background: var(--q-bg-primary, #0f172a);
-        color: var(--q-text-primary, #f8fafc);
-        border: 1px solid var(--q-accent, #38bdf8);
-        border-radius: 6px;
-        padding: 4px 8px;
-        font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+        background: var(--q-bg-surface, #ffffff);
+        color: var(--q-text-primary, #1d1d1f);
+        border: 1px solid var(--q-border, #e5e5ea);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
         z-index: ${OVERLAY_STYLES.Z_INDEX + 1};
-        box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 170px;
+      }
+
+      .tooltip-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      .tooltip-card-tag { color: var(--q-text-primary); font-weight: 700; }
+      .tooltip-card-dim { color: var(--q-text-muted); font-size: 11px; font-weight: 500; }
+      .tooltip-card-divider { height: 1px; background: var(--q-border, #e5e5ea); margin: 2px 0; }
+
+      .tooltip-card-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .tooltip-card-label { color: var(--q-text-muted); font-weight: 500; }
+      .tooltip-card-pill {
+        background: var(--q-bg-primary, #f5f5f7);
+        border: 1px solid var(--q-border, #e5e5ea);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-family: SFMono-Regular, Consolas, monospace;
+        font-size: 10px;
         display: flex;
         align-items: center;
         gap: 4px;
       }
 
-      .tooltip-tag { color: var(--q-text-accent, #38bdf8); font-weight: 700; }
-      .tooltip-id { color: var(--q-warning, #f59e0b); }
-      .tooltip-class { color: var(--q-success, #10b981); }
-      .tooltip-dim { color: var(--q-text-muted, #94a3b8); font-size: 10px; margin-left: 4px; }
+      .swatch-mini {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        border: 1px solid rgba(0,0,0,0.15);
+        display: inline-block;
+      }
     `;
 
     this.shadowRoot.appendChild(styleTag);
@@ -111,11 +167,18 @@ export class InspectorOverlay {
     this.selectedBox = document.createElement('div');
     this.selectedBox.className = 'inspector-box selected-box';
     this.selectedBox.style.display = 'none';
+
+    // Numbered Badge '1'
+    this.selectedBadge = document.createElement('div');
+    this.selectedBadge.className = 'selected-badge-num';
+    this.selectedBadge.textContent = '1';
+    this.selectedBox.appendChild(this.selectedBadge);
+
     this.shadowRoot.appendChild(this.selectedBox);
 
-    // Tooltip
+    // Tooltip Card
     this.tooltip = document.createElement('div');
-    this.tooltip.className = 'inspector-tooltip';
+    this.tooltip.className = 'inspector-tooltip-card';
     this.tooltip.style.display = 'none';
     this.shadowRoot.appendChild(this.tooltip);
   }
@@ -145,24 +208,50 @@ export class InspectorOverlay {
       this.positionBox(this.hoverBox, rect);
       this.hoverBox.style.display = 'block';
 
-      // Tooltip positioning
-      const tag = element.tagName.toLowerCase();
-      const id = element.id ? `#${element.id}` : '';
-      const classes = Array.from(element.classList).slice(0, 2).map(c => `.${c}`).join('');
-      const dim = `${Math.round(rect.width)}×${Math.round(rect.height)}px`;
+      // Qursor Hover Inspector Card Data
+      const tag = `<${element.tagName.toLowerCase()}>`;
+      const dim = `${Math.round(rect.width)} × ${Math.round(rect.height)}px`;
+      const cs = window.getComputedStyle(element);
+
+      const textColorHex = rgbToHex(cs.color) || '#000000';
+      const bgColorHex = rgbToHex(cs.backgroundColor) || '#FFFFFF';
+      const fontStr = `${cs.fontFamily.split(',')[0].replace(/['"]/g, '')} ${cs.fontSize} / ${cs.fontWeight} / ${cs.lineHeight}`;
+      const paddingStr = cs.padding !== '0px' ? cs.padding : '0px';
+      const marginStr = cs.margin !== '0px' ? cs.margin : '0px';
 
       this.tooltip.innerHTML = `
-        <span class="tooltip-tag">&lt;${tag}&gt;</span>
-        <span class="tooltip-id">${id}</span>
-        <span class="tooltip-class">${classes}</span>
-        <span class="tooltip-dim">${dim}</span>
+        <div class="tooltip-card-header">
+          <span class="tooltip-card-tag">${tag}</span>
+          <span class="tooltip-card-dim">${dim}</span>
+        </div>
+        <div class="tooltip-card-divider"></div>
+        <div class="tooltip-card-row">
+          <span class="tooltip-card-label">Text</span>
+          <span class="tooltip-card-pill"><span class="swatch-mini" style="background:${textColorHex};"></span>${textColorHex}</span>
+        </div>
+        <div class="tooltip-card-row">
+          <span class="tooltip-card-label">Background</span>
+          <span class="tooltip-card-pill"><span class="swatch-mini" style="background:${bgColorHex};"></span>${bgColorHex}</span>
+        </div>
+        <div class="tooltip-card-row">
+          <span class="tooltip-card-label">Font</span>
+          <span class="tooltip-card-pill">${fontStr}</span>
+        </div>
+        <div class="tooltip-card-row">
+          <span class="tooltip-card-label">Padding</span>
+          <span class="tooltip-card-pill">${paddingStr}</span>
+        </div>
+        <div class="tooltip-card-row">
+          <span class="tooltip-card-label">Margin</span>
+          <span class="tooltip-card-pill">${marginStr}</span>
+        </div>
       `;
 
-      let top = rect.top - 32;
-      if (top < 5) top = rect.bottom + 6;
+      let top = rect.top - 140;
+      if (top < 10) top = rect.bottom + 10;
 
       this.tooltip.style.top = `${top}px`;
-      this.tooltip.style.left = `${Math.max(6, rect.left)}px`;
+      this.tooltip.style.left = `${Math.max(10, rect.left)}px`;
       this.tooltip.style.display = 'flex';
     });
   }
@@ -216,4 +305,17 @@ export class InspectorOverlay {
     if (this.selectedBox) this.selectedBox.style.display = 'none';
     this.selectedElement = null;
   }
+}
+
+function rgbToHex(colorStr) {
+  if (!colorStr) return '';
+  if (colorStr.startsWith('#')) return colorStr;
+  const match = colorStr.match(/\d+/g);
+  if (match && match.length >= 3) {
+    const r = parseInt(match[0], 10).toString(16).padStart(2, '0').toUpperCase();
+    const g = parseInt(match[1], 10).toString(16).padStart(2, '0').toUpperCase();
+    const b = parseInt(match[2], 10).toString(16).padStart(2, '0').toUpperCase();
+    return `#${r}${g}${b}`;
+  }
+  return '';
 }
