@@ -1,107 +1,65 @@
-# 08 - File Responsibilities & Symbol Index
+# Qursor++ — File Responsibilities & Modules
 
-An exhaustive specification of every file in the project workspace, including exported classes, functions, dependencies, and operational roles.
-
----
-
-## Root Configuration Files
-
-### 1. [`manifest.json`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/manifest.json)
-- **Purpose**: Defines Chrome Extension Manifest V3 configuration, permissions, background worker declaration, content script entry points, web-accessible resources, and keyboard shortcuts.
-- **Key Fields**: `permissions: ["activeTab", "scripting", "storage"]`, `commands: { toggle-inspect-mode }`.
-- **Dependencies**: None.
+This document details the exact responsibilities of every file in the **Qursor++** codebase.
 
 ---
 
-## Extension Background Layer (`background/`)
+## Workspace Modules Breakdown
 
-### 2. [`background/background.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/background/background.js)
-- **Purpose**: MV3 Service Worker managing inspect active state, processing commands, and dispatching tab messages.
-- **Exported Symbols / Main Functions**:
-  - `toggleTabInspectMode(tabId, sendResponse)`: Toggles active state in `chrome.storage.local` and sends state to tab.
-  - Event listeners: `chrome.runtime.onInstalled`, `chrome.commands.onCommand`, `chrome.runtime.onMessage`.
-- **Dependencies**: Imports `ACTIONS` from `utils/constants.js`.
+### 1. `manifest.json`
+- **Purpose**: Chrome Extension Manifest V3 configuration.
+- **Responsibilities**: Registers Service Worker (`background/background.js`), Content Script loader (`content/loader.js`), keyboard shortcuts (`Ctrl+Shift+I`), permissions (`activeTab`, `scripting`, `storage`), popup interface, and web-accessible resources (`utils/*.js`, `content/*.js`).
 
----
+### 2. `background/background.js`
+- **Purpose**: Service Worker state orchestrator.
+- **Responsibilities**: Manages global inspect toggle state, handles keyboard commands (`toggle-inspect-mode`), communicates state changes to active tab content scripts, and syncs Chrome Storage preferences.
 
-## Content Scripts Layer (`content/`)
+### 3. `content/loader.js`
+- **Purpose**: Dynamic ES Module content script loader.
+- **Responsibilities**: Imports `content/inspector.js` into active tab context using `chrome.runtime.getURL`.
 
-### 3. [`content/loader.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/loader.js)
-- **Purpose**: Dynamic loader content script. Bypasses MV3 content script module limitations by executing dynamic `import()` of `content/inspector.js`.
-- **Dependencies**: Resolves URL via `chrome.runtime.getURL('content/inspector.js')`.
+### 4. `content/inspector.js`
+- **Purpose**: Main content script orchestrator (`QursorEngine`).
+- **Responsibilities**: Listens to mouse movements, intercepts clicks in capture phase (`e.preventDefault()`), handles `ESC` cancellation, updates `InspectorOverlay` and `InspectorPanel`, and listens to state/theme change messages.
 
-### 4. [`content/inspector.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/inspector.js)
-- **Purpose**: Master Content Script Orchestrator & State Machine (`DOMLensEngine`).
-- **Main Class**: `DOMLensEngine`
-  - `init()`: Instantiates `InspectorOverlay` and `InspectorPanel`.
-  - `enable()`: Attaches capture-phase listeners (`mousemove`, `click`, `keydown`).
-  - `disable()`: Detaches capture-phase listeners and clears highlights.
-  - `handleMouseMove(e)`: Tracks hover targets via `document.elementFromPoint`.
-  - `handleClick(e)`: Intercepts click (`e.preventDefault()`, `e.stopPropagation()`), extracts data, and updates panel.
-  - `handleKeyDown(e)`: Cancels inspect mode on `ESC`.
-- **Dependencies**: Imports `ACTIONS`, `extractElementData`, `InspectorOverlay`, `InspectorPanel`.
+### 5. `content/overlay.js`
+- **Purpose**: Sub-pixel visual overlay highlight engine (`InspectorOverlay`).
+- **Responsibilities**: Manages hover bounding boxes, scroll-locked green selection boxes, tag dimension tooltips, and Shadow DOM root (`<website-inspector-root>`).
 
-### 5. [`content/overlay.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/overlay.js)
-- **Purpose**: Renders visual hover overlays, bounding boxes, and dimension tooltips inside Shadow DOM.
-- **Main Class**: `InspectorOverlay`
-  - `initShadowDom()`: Creates `<website-inspector-root>` and attaches Shadow Root.
-  - `updateHover(element)`: Renders sub-pixel hover box and dimension tooltip using `requestAnimationFrame`.
-  - `updateSelected(element)`: Renders green selected box on target element.
-  - `hideHover()`, `hideAll()`: Clears overlay elements.
-- **Dependencies**: Imports `OVERLAY_STYLES` from `utils/constants.js`.
+### 6. `content/panel.js`
+- **Purpose**: Floating Information Panel UI (`InspectorPanel`).
+- **Responsibilities**: Movable, resizable, collapsible dark/light floating panel featuring 12 developer-focused data tabs, theme toggle, framework code preview editor, AI prompt builder editor, file download, and quick copy toolbar.
 
-### 6. [`content/panel.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/panel.js)
-- **Purpose**: movable, resizable, collapsible dark glassmorphic floating UI panel with 11 inspectable tabs.
-- **Main Class**: `InspectorPanel`
-  - `createPanelDOM()`: Constructs panel HTML structure and scoped CSS in Shadow DOM.
-  - `attachEventListeners()`: Header drag, collapse button, tab switching, and clipboard actions.
-  - `updateData(data)`: Updates panel content with element analysis telemetry.
-  - `renderTabContent()`: Renders active tab view (`general`, `layout`, `typography`, `colors`, `spacing`, `border`, `flex`, `dom`, `attributes`, `html`, `css`).
-  - `showToast(msg)`: Displays animated copy feedback toast.
-- **Dependencies**: Imports `PANEL_TABS`, `copyToClipboard`.
+### 7. `content/extractor.js`
+- **Purpose**: Element Data Extractor (`extractElementData`).
+- **Responsibilities**: Aggregates computed CSS styles, box model spacing, typography, colors, borders, flexbox/grid telemetry, accessibility ARIA attributes, SVG graphics, and DOM depth levels.
 
-### 7. [`content/extractor.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/extractor.js)
-- **Purpose**: Master analytical data extraction engine assembling full DOM metrics and style objects.
-- **Main Functions**:
-  - `extractElementData(element)`: Assembles complete inspection payload.
-  - `extractAriaAttributes(element)`: Collects `aria-*` attribute map.
-  - `extractSpecializedDetails(element, tag)`: Collects details for `img`, `a`, `button`, and `input` tags.
-- **Dependencies**: Imports `getCssSelector`, `getXPath`, `getDomHierarchy`, `getElementAttributes`, `getCleanTextContent`, `extractComputedStyles`, `getRawCssString`.
+### 8. `utils/theme.js` [NEW]
+- **Purpose**: Theme & Design Token Manager (`ThemeManager`).
+- **Responsibilities**: Defines CSS Custom Properties for Dark and Light themes (`DESIGN_TOKENS`), manages `chrome.storage.sync` theme preference, and applies themes dynamically to Shadow DOM and popup.
 
----
+### 9. `utils/toast.js` [NEW]
+- **Purpose**: Action Feedback Toast Manager (`ToastManager`).
+- **Responsibilities**: Renders smooth, non-intrusive floating toast feedback inside Shadow DOM for copy and download confirmation.
 
-## Helper Utilities Layer (`utils/`)
+### 10. `utils/tailwind_mapper.js` [NEW]
+- **Purpose**: Computed CSS to Tailwind Utility Class Mapper (`mapStylesToTailwind`).
+- **Responsibilities**: Converts computed CSS declarations (display, padding, margin, flex, typography, colors, borders, radii, shadows) into standard Tailwind CSS utility classes.
 
-### 8. [`utils/constants.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/utils/constants.js)
-- **Exports**: `ACTIONS`, `INSPECTOR_STATE`, `PANEL_TABS`, `OVERLAY_STYLES`.
+### 11. `utils/component_generator.js` [NEW]
+- **Purpose**: Multi-Framework Component Generator (`generateComponentCode`).
+- **Responsibilities**: Synthesizes clean reusable component snippets for React JSX, Vue 3 SFC, Angular Component, Tailwind CSS, Vanilla HTML/CSS/JS, and Clean HTML.
 
-### 9. [`utils/selector.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/utils/selector.js)
-- **Exports**:
-  - `getCssSelector(element)`: Generates unique CSS Selector path.
-  - `getXPath(element)`: Generates precise XPath string.
+### 12. `utils/prompt_generator.js` [NEW]
+- **Purpose**: AI Prompt Generator (`generateStructuredAiPrompt`).
+- **Responsibilities**: Formats structured, contextual AI prompts for LLM coding assistants (Cursor, Claude, Antigravity, ChatGPT), including target specs, DOM hierarchy, styling, layout, assets, responsive behavior, interaction states, and AI requirements.
 
-### 10. [`utils/dom.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/utils/dom.js)
-- **Exports**:
-  - `getElementDepth(element)`: Calculates tree depth relative to document root.
-  - `getDomHierarchy(element)`: Returns parent, sibling, child tag, and depth details.
-  - `getElementAttributes(element)`: Maps all HTML attributes to key-value object.
-  - `getCleanTextContent(element, maxLength)`: Safe string summarizer.
+### 13. `utils/constants.js`
+- **Purpose**: Centralized constant definitions (`ACTIONS`, `INSPECTOR_STATE`, `PANEL_TABS`, `OVERLAY_STYLES`).
 
-### 11. [`utils/style.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/utils/style.js)
-- **Exports**:
-  - `rgbToHex(rgbStr)`: Converts `rgb()` / `rgba()` to Hex string (`#rrggbb` / `#rrggbbaa`).
-  - `extractComputedStyles(element)`: Returns grouped computed styles.
-  - `getRawCssString(element)`: Formats computed style rules as CSS code block.
+### 14. `utils/dom.js` / `utils/selector.js` / `utils/style.js` / `utils/clipboard.js`
+- **Purpose**: Core helper utilities for DOM hierarchy traversal, CSS selector generation, XPath creation, computed style extraction, and clipboard operations.
 
-### 12. [`utils/clipboard.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/utils/clipboard.js)
-- **Exports**: `copyToClipboard(text)`: Async clipboard write with `document.execCommand('copy')` fallback.
-
----
-
-## Popup & Helper Layer (`popup/` & `scripts/`)
-
-### 13. [`popup/popup.html`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/popup/popup.html) / [`popup.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/popup/popup.js) / [`popup.css`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/popup/popup.css)
-- **Purpose**: Extension toolbar popup UI for toggling inspector state and opening documentation.
-
-### 14. [`scripts/generate_icons.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/scripts/generate_icons.js)
-- **Purpose**: Node canvas script generating extension icons (`16x16`, `48x48`, `128x128`).
+### 15. `popup/popup.html` / `popup/popup.css` / `popup/popup.js`
+- **Purpose**: Extension toolbar popup UI.
+- **Responsibilities**: Renders developer-tool status card, inspect toggle button, Light/Dark theme switcher, keyboard shortcuts card, and documentation link.

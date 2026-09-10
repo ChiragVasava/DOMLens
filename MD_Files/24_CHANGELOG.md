@@ -1,63 +1,45 @@
-# 24 - Project Changelog
+# Qursor++ — Release Changelog
 
-## Release History
-
-All notable changes to the **Qursor++ (DOMLens)** project will be documented in this file.
+All notable changes to **Qursor++** are documented in this file.
 
 ---
 
-## [1.1.0] - 2026-09-06 (Phase 3 Component Preview & Overlay Enhancements)
+## [1.0.0] - Master Redesign & Feature Implementation
 
-### Added
-- **Phase 3 Component Live Preview Tab (`content/panel.js`)**:
-  - Added an isolated `Preview` tab (`👁️ Preview`) displaying a live rendered iframe of the target element containing ONLY its HTML and CSS.
+### 🎨 Complete UI/UX Redesign & Theme System
+- **Design Tokens Engine**: Implemented `utils/theme.js` for centralized CSS custom properties (`--q-bg-primary`, `--q-surface`, `--q-accent`, `--q-border`, `--q-text-primary`).
+- **Dark, Light, & System Modes**: Complete theme support across Extension Popup and Shadow DOM floating inspector panel with live theme switcher (`☀️ / 🌙`).
+- **Chrome Storage Persistence**: Automatically syncs user theme preference across sessions using `chrome.storage.sync`.
+- **Developer-Tool Aesthetics**: Compact visual identity inspired by modern devtools (Linear, Raycast, Vercel design systems), featuring precise typography, glassmorphism, responsive tab bar, dark/light theme switching, code syntax highlighting, and interactive toast feedback (`utils/toast.js`).
 
-### Fixed
-- **Clean HTML View**: Stripped `class="..."` attribute strings from the `HTML` tab code block and copy actions to eliminate redundancy with `General` and `Attributes` tabs.
-- **Scroll-Locked Selection Rectangle (`content/overlay.js`)**: Updated `.selected-box` positioning to use document-absolute coordinates (`window.scrollY` / `window.scrollX`) and active `scroll`/`resize` listeners so the green selection rectangle stays attached to the element during page scrolling.
-- **Overlay Cleanup on Close (`content/inspector.js`)**: Added `onClose` callback and complete overlay destruction (`hideAll()`) when closing the panel (`✕` button) or exiting inspect mode.
+### 📊 12 Developer-Focused Inspection Tabs
+- Extended inspection panel tabs to **12 structured developer sections**:
+  1. `Overview`: Tag, ID, classes, ARIA role, accessible name, text content, input value, tab index, visibility state.
+  2. `Styles`: Formatted computed CSS rules list.
+  3. `Layout`: Box model metrics (dimensions, display, position, top/left/right/bottom, z-index, overflow).
+  4. `Typography`: Font family, font size, font weight, line height, letter spacing, text alignment, text transform.
+  5. `Colors`: Text color, background color, border color, box shadow, opacity with live color swatches and 1-click format copy.
+  6. `Spacing`: Margin, padding, gap with interactive box model visual diagram.
+  7. `Border`: Top/Right/Bottom/Left border widths, styles, colors, and border-radius.
+  8. `Flex & Grid`: Flex direction, wrap, justify-content, align-items, flex-grow/shrink, grid columns/rows, gap.
+  9. `DOM`: Parent node, children count/types, siblings, DOM tree depth level, selector path tree.
+  10. `Accessibility (A11y)`: ARIA attributes (`aria-*`), implicit/explicit roles, accessible names, keyboard navigation states.
+  11. `Component`: Multi-framework code synthesizer with interactive code editor.
+  12. `AI Prompt`: Structured prompt generator for AI coding assistants.
 
----
+### ⚛️ Multi-Framework Component Generator
+- Implemented `utils/component_generator.js` and `utils/tailwind_mapper.js` supporting:
+  - **React JSX**: Clean functional component export (`export default function Component()`).
+  - **Vue 3 SFC**: Single File Components with `<template>`, `<script setup>`, `<style scoped>`.
+  - **Angular Component**: Angular 17+ standalone `@Component` metadata and template.
+  - **Tailwind CSS HTML**: Utility class mapper converting computed styles into Tailwind utility classes.
+  - **Vanilla HTML/CSS/JS**: Modular HTML, CSS, and JS bundle.
+  - **Clean HTML & CSS**: Formatted HTML snippet and computed CSS block.
 
-## [1.0.0] - 2026-09-05 (Phase 1 & Phase 2 Complete)
+### ✨ Structured AI Prompt Generator
+- Implemented `utils/prompt_generator.js` aggregating element telemetry (target specs, DOM hierarchy, visual styling, layout, assets, responsive behavior, interaction states, and AI requirements) into structured markdown prompts for LLM coding agents (Cursor, Claude, Antigravity, ChatGPT).
+- Added editable prompt preview textarea, target framework selector, copy prompt button, download `.md` file button, and prompt regenerator.
 
-### Added
-- **Chrome Extension Manifest V3 Architecture**:
-  - Event-driven background service worker (`background/background.js`).
-  - Dynamic module loader (`content/loader.js`) overcoming MV3 content script import constraints.
-  - Storage state synchronization via `chrome.storage.local`.
-  - Global hotkey shortcut `Ctrl+Shift+I` / `Cmd+Shift+I`.
-- **Encapsulated Shadow DOM Root (`<website-inspector-root>`)**:
-  - 100% style isolation ensuring extension styles never leak into host webpage DOM.
-- **Visual Overlay Highlights (`content/overlay.js`)**:
-  - Sub-pixel hover bounding box highlights.
-  - Floating tag dimension tooltips (`<tag#id.class width×height>`).
-  - Throttle updates using `requestAnimationFrame`.
-  - Capture-phase click interceptor preventing default page action execution (`e.preventDefault()`, `e.stopPropagation()`).
-  - `ESC` keyboard handler to exit inspect mode instantly.
-- **Movable, Resizable 11-Tab Inspector Panel (`content/panel.js`)**:
-  - Movable header with boundary limits.
-  - Collapsible window state.
-  - 11 dedicated data tabs (*General, Layout, Typography, Colors, Spacing, Border, Flex & Grid, DOM, Attributes, HTML, CSS*).
-  - Clean HTML & CSS monospaced code blocks.
-- **Analytical Data Extractor (`content/extractor.js`)**:
-  - Computed style parser for layout, spacing, typography, colors, border, flex/grid.
-  - Dual RGB-to-Hex color string converter.
-  - DOM depth tree level calculator (`utils/dom.js`).
-  - Unique CSS Selector path generator (`utils/selector.js`).
-  - Precise XPath string builder (`utils/selector.js`).
-  - Specialized attribute extractors for Images, Links, Buttons, and Inputs.
-- **1-Click DevTools Clipboard Copier (`utils/clipboard.js`)**:
-  - 1-click quick action export buttons for JSON, HTML, OuterHTML, Selector, XPath, and CSS.
-  - Animated top-center toast feedback notification.
-  - Dual-layer clipboard writer with off-screen `document.execCommand('copy')` fallback.
-- **Extension Popup Controller (`popup/`)**:
-  - Dark mode glassmorphic interface with active status indicator pill.
-  - Toggle button and shortcut cheat-sheet.
-
----
-
-## Initial Project Setup - 2026-07-31
-
-- Project repository initialization (formerly DOMLens / Qursor++).
-- Setup of baseline directory layout, assets, icons, and `README.md`.
+### ⚡ Quick Action Toolbar & Toast Feedback
+- Non-intrusive action confirmation toasts (`utils/toast.js`) inside Shadow DOM.
+- 1-click file download of generated component code (`.jsx`, `.vue`, `.html`) and AI prompts (`.md`).

@@ -160,6 +160,10 @@ class QursorEngine {
       } else {
         this.disable(true);
       }
+    } else if (message.action === ACTIONS.THEME_CHANGED) {
+      if (this.panel && this.panel.themeManager) {
+        this.panel.themeManager.setTheme(message.theme, false);
+      }
     }
   }
 }

@@ -1,10 +1,11 @@
 /**
- * Qursor++ - Popup Logic
+ * Qursor++ AI - Popup Logic
  * 
- * Synchronizes inspector state with background service worker and active tab.
+ * Synchronizes inspector state, theme preferences, and shortcuts with background service worker.
  */
 
 import { ACTIONS } from '../utils/constants.js';
+import { THEME_STORAGE_KEY, THEMES } from '../utils/theme.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const toggleBtn = document.getElementById('toggleBtn');
@@ -13,6 +14,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusText = document.getElementById('statusText');
   const docBtn = document.getElementById('docBtn');
   const settingsBtn = document.getElementById('settingsBtn');
+  const themeSwitcher = document.getElementById('themeSwitcher');
+
+  // Initialize theme from storage
+  chrome.storage.sync.get([THEME_STORAGE_KEY], (res) => {
+    const theme = res[THEME_STORAGE_KEY] || THEMES.DARK;
+    applyTheme(theme);
+  });
+
+  // Handle Theme Switching
+  themeSwitcher.addEventListener('click', (e) => {
+    const btn = e.target.closest('.theme-btn');
+    if (!btn) return;
+    const val = btn.dataset.themeVal;
+    applyTheme(val);
+    chrome.storage.sync.set({ [THEME_STORAGE_KEY]: val });
+
+    // Notify active content script tabs
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0] && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: ACTIONS.THEME_CHANGED, theme: val }).catch(() => {});
+      }
+    });
+  });
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeSwitcher.querySelectorAll('.theme-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.themeVal === theme);
+    });
+  }
 
   // Initialize status from background storage
   chrome.runtime.sendMessage({ action: ACTIONS.GET_INSPECT_STATE }, (response) => {
@@ -33,13 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Documentation button click
   docBtn.addEventListener('click', () => {
     chrome.tabs.create({
-      url: 'https://developer.chrome.com/docs/extensions/mv3/'
+      url: 'https://github.com/ChiragVasava/DOMLens'
     });
   });
 
   // Settings button click placeholder
   settingsBtn.addEventListener('click', () => {
-    alert('Qursor++ Settings (Phase 2 feature coming soon)');
+    alert('Qursor++ AI Inspector Settings: Theme, Keyboard Shortcuts, and AI Prompt Rules configured via Popup and Panel controls.');
   });
 
   /**

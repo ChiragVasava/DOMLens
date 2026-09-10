@@ -1,23 +1,44 @@
-# 20 - Current Implementation Snapshot
+# Qursor++ — Current Implementation Snapshot
 
-## Status Summary as of Version 1.1.0
+Point. Inspect. Generate. Build.
 
-```text
-Phase 1 (Visual Inspector & Overlay): 100% Completed
-Phase 2 (Deep Extraction, DOM Depth, 1-Click Copy & Shadow DOM Panel): 100% Completed
-Phase 3 Preview Feature (Isolated HTML & CSS Live Preview): 100% Completed
-Codebase Health: Zero syntax errors, zero missing imports, zero third-party npm vulnerabilities
-```
+This document describes the current snapshot of the **Qursor++** implementation.
 
 ---
 
-## Active Code Base Assets
+## Completed Architecture & Component Status
 
-1. **Manifest File**: [`manifest.json`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/manifest.json) configured for Chrome MV3 with background module worker, `activeTab`, `scripting`, `storage`, and `Ctrl+Shift+I` shortcut.
-2. **Background Worker**: [`background/background.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/background/background.js) handling command shortcuts, storage synchronization, and dynamic loader injection retries.
-3. **Popup Interface**: [`popup/`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/popup/) (`popup.html`, `popup.css`, `popup.js`) featuring real-time inspector status pill, toggle action button, and shortcut reference card.
-4. **Content Orchestrator**: [`content/inspector.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/inspector.js) controlling capture-phase mouse move tracking, element click interception (`e.preventDefault()`), and `ESC` cancellation.
-5. **Overlay Highlight Engine**: [`content/overlay.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/overlay.js) rendering sub-pixel bounding highlights, scroll-locked green selection boxes, and tag dimension tooltips inside Shadow DOM (`<website-inspector-root>`).
-6. **Floating Inspector Panel**: [`content/panel.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/panel.js) dark glassmorphism movable inspector window featuring 12 data tabs (*Preview, General, Layout, Typography, Colors, Spacing, Border, Flex & Grid, DOM, Attributes, HTML, CSS*) and 1-click clipboard export buttons.
-7. **Data Extractor**: [`content/extractor.js`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/content/extractor.js) aggregating computed styles, box model spacing, typography, DOM depth tree levels, unique CSS selectors, XPaths, and tag-specific telemetry.
-8. **Shared Utilities**: [`utils/`](file:///c:/Users/Chirag%20Vasava/Downloads/Personal/Final%20Projects/DOMLens/utils/) (`constants.js`, `selector.js`, `dom.js`, `style.js`, `clipboard.js`).
+### 1. 🎨 Design System Tokens & Theme Engine (`utils/theme.js`)
+- CSS Custom Properties (`DESIGN_TOKENS`) for Dark and Light themes.
+- Theme manager (`ThemeManager`) with `chrome.storage.sync` persistence and real-time Shadow DOM theme switching.
+
+### 2. ⚡ Toast Notification Subsystem (`utils/toast.js`)
+- Renders non-intrusive floating toast notifications (`ToastManager`) inside Shadow DOM for copy and download actions.
+
+### 3. 🔍 Visual Inspection & Sub-Pixel Overlay (`content/overlay.js` / `content/inspector.js`)
+- Hardware-accelerated hover highlights with tag dimension tooltips.
+- Absolute document coordinate selection rectangle that locks to element during scrolling and window resizing.
+- Isolated Shadow DOM root (`<website-inspector-root>`).
+
+### 4. 📊 12 Developer-Focused Inspection Tabs (`content/panel.js`)
+1. **Overview**: Tag, ID, classes, ARIA role, accessible name, text snippet, value, tabIndex, visibility.
+2. **Styles**: Computed CSS rules list.
+3. **Layout**: Width, height, display, position, top/left/right/bottom, z-index, overflow.
+4. **Typography**: Font family, font size, weight, line-height, letter/word spacing, text-align, transform.
+5. **Colors**: Text color, background color, border color, box shadow, opacity with live color swatches.
+6. **Spacing**: Margin, padding, gap with interactive visual box model diagram.
+7. **Border**: Widths, styles, colors, border-radius.
+8. **Flex & Grid**: Direction, wrap, justify-content, align-items, gap, grid columns/rows.
+9. **DOM**: Parent, children count/types, siblings, DOM tree depth level, selector path, XPath.
+10. **Accessibility**: ARIA attributes, role, accessible name, keyboard navigation states.
+11. **Component**: Multi-framework code generator with interactive code editor.
+12. **AI Prompt**: Structured prompt builder for AI coding assistants.
+
+### 5. ⚛️ Multi-Framework Code Synthesizer (`utils/component_generator.js` & `utils/tailwind_mapper.js`)
+- Generates clean component snippets for React JSX, Vue 3 SFC, Angular, Tailwind CSS, Vanilla HTML/CSS, and Clean HTML.
+
+### 6. ✨ AI Prompt Generator (`utils/prompt_generator.js`)
+- Synthesizes comprehensive markdown prompts formatted for AI coding agents (Cursor, Claude, Antigravity, ChatGPT). Includes target specs, DOM hierarchy, styling, layout, assets, responsive behavior, interaction states, and AI requirements.
+
+### 7. 🎛️ Extension Popup Interface (`popup/`)
+- Developer tool status card, inspect toggle button, Light/Dark theme switcher buttons, keyboard shortcuts card, feature badges, and documentation links.

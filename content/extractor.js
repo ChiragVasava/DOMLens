@@ -1,8 +1,8 @@
 /**
- * Website Inspector AI - Element Data Extractor
+ * Qursor++ - Element Data Extractor
  * 
  * Master analytical engine collecting complete DevTools-grade DOM properties,
- * computed styles, box model, hierarchy, selector paths, and element-specific details.
+ * computed styles, box model, hierarchy, selector paths, accessibility, and element-specific details.
  */
 
 import { getCssSelector, getXPath } from '../utils/selector.js';
@@ -25,6 +25,13 @@ export function extractElementData(element) {
   const styles = extractComputedStyles(element);
   const rawCss = getRawCssString(element);
 
+  // Accessibility & ARIA Telemetry
+  const ariaAttrs = extractAriaAttributes(element);
+  const implicitRole = getImplicitRole(element);
+  const explicitRole = element.getAttribute('role');
+  const role = explicitRole || implicitRole || 'N/A';
+  const accessibleName = extractAccessibleName(element);
+
   // General Attributes & Properties
   const general = {
     tagName: tag.toUpperCase(),
@@ -42,8 +49,9 @@ export function extractElementData(element) {
     href: element.href || element.getAttribute('href') || 'N/A',
     src: element.src || element.getAttribute('src') || 'N/A',
     alt: element.alt || element.getAttribute('alt') || 'N/A',
-    role: element.getAttribute('role') || 'N/A',
-    ariaAttributes: extractAriaAttributes(element),
+    role: role,
+    accessibleName: accessibleName,
+    ariaAttributes: ariaAttrs,
     tabIndex: element.tabIndex,
     isContentEditable: element.isContentEditable,
     disabled: element.disabled !== undefined ? element.disabled : false,
@@ -51,7 +59,7 @@ export function extractElementData(element) {
     hidden: element.hidden || styles.layout.display === 'none'
   };
 
-  // Element Specific Details
+  // Element Specific Details (Images, Links, Buttons, Inputs, SVGs)
   const specialDetails = extractSpecializedDetails(element, tag);
   const pageStyles = getPageStylesheets();
   const rect = element.getBoundingClientRect();
@@ -119,10 +127,46 @@ function extractAriaAttributes(element) {
 }
 
 /**
- * Extracts type-specific details for Images, Links, Buttons, Inputs
- * @param {Element} element 
- * @param {string} tag 
- * @returns {Object}
+ * Extracts accessible name from ARIA, alt, title, label, or text content
+ */
+function extractAccessibleName(element) {
+  if (element.getAttribute('aria-label')) return element.getAttribute('aria-label');
+  if (element.getAttribute('aria-labelledby')) {
+    const labelEl = document.getElementById(element.getAttribute('aria-labelledby'));
+    if (labelEl) return labelEl.textContent.trim();
+  }
+  if (element.labels && element.labels.length > 0) return element.labels[0].textContent.trim();
+  if (element.alt) return element.alt;
+  if (element.title) return element.title;
+  return getCleanTextContent(element, 50) || 'N/A';
+}
+
+/**
+ * Derives implicit WAI-ARIA role based on HTML5 element semantics
+ */
+function getImplicitRole(element) {
+  const tag = element.tagName.toLowerCase();
+  const type = element.getAttribute('type');
+
+  if (tag === 'a' && element.hasAttribute('href')) return 'link';
+  if (tag === 'button') return 'button';
+  if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') return 'heading';
+  if (tag === 'img') return 'img';
+  if (tag === 'nav') return 'navigation';
+  if (tag === 'main') return 'main';
+  if (tag === 'header') return 'banner';
+  if (tag === 'footer') return 'contentinfo';
+  if (tag === 'input') {
+    if (type === 'checkbox') return 'checkbox';
+    if (type === 'radio') return 'radio';
+    if (type === 'button' || type === 'submit' || type === 'reset') return 'button';
+    return 'textbox';
+  }
+  return null;
+}
+
+/**
+ * Extracts type-specific details for Images, Links, Buttons, Inputs, SVGs
  */
 function extractSpecializedDetails(element, tag) {
   const details = {};
@@ -137,6 +181,9 @@ function extractSpecializedDetails(element, tag) {
     details.displayedHeight = `${Math.round(img.height)}px`;
     details.altText = img.alt || 'N/A';
     details.isLazyLoaded = img.loading === 'lazy';
+  } else if (tag === 'svg' || element.querySelector('svg')) {
+    details.type = 'SVG';
+    details.hasInlineSvg = true;
   } else if (tag === 'a') {
     const link = /** @type {HTMLAnchorElement} */ (element);
     details.type = 'LINK';

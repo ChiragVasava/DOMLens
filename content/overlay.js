@@ -1,11 +1,12 @@
 /**
- * Website Inspector AI - Visual Overlay Engine
+ * Qursor++ - Visual Overlay Engine
  * 
  * Manages hover bounding box highlights and selection indicators.
  * Uses Shadow DOM to ensure zero style leakage between host site and extension UI.
  */
 
 import { OVERLAY_STYLES } from '../utils/constants.js';
+import { DESIGN_TOKENS } from '../utils/theme.js';
 
 export class InspectorOverlay {
   constructor() {
@@ -49,48 +50,53 @@ export class InspectorOverlay {
   renderOverlayContainers() {
     const styleTag = document.createElement('style');
     styleTag.textContent = `
+      ${DESIGN_TOKENS}
+
       .inspector-box {
         position: fixed;
         pointer-events: none;
         box-sizing: border-box;
         transition: all 0.05s ease-out;
         z-index: ${OVERLAY_STYLES.Z_INDEX};
-        border-radius: 2px;
+        border-radius: 3px;
       }
 
       .hover-box {
-        border: ${OVERLAY_STYLES.HOVER_BORDER};
-        background: ${OVERLAY_STYLES.HOVER_BG};
-        box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+        border: var(--q-overlay-hover-border, 2px solid #38bdf8);
+        background: var(--q-overlay-hover-bg, rgba(56, 189, 248, 0.15));
+        box-shadow: var(--q-overlay-hover-shadow, 0 0 10px rgba(56, 189, 248, 0.4));
       }
 
       .selected-box {
         position: absolute;
-        border: ${OVERLAY_STYLES.SELECTED_BORDER};
-        background: ${OVERLAY_STYLES.SELECTED_BG};
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+        border: var(--q-overlay-select-border, 2px solid #10b981);
+        background: var(--q-overlay-select-bg, rgba(16, 185, 129, 0.15));
+        box-shadow: var(--q-overlay-select-shadow, 0 0 12px rgba(16, 185, 129, 0.5));
       }
 
       .inspector-tooltip {
         position: fixed;
         pointer-events: none;
-        background: #0f172a;
-        color: #f8fafc;
-        border: 1px solid #38bdf8;
-        border-radius: 4px;
-        padding: 3px 8px;
-        font-family: monospace;
+        background: var(--q-bg-primary, #0f172a);
+        color: var(--q-text-primary, #f8fafc);
+        border: 1px solid var(--q-accent, #38bdf8);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
         font-size: 11px;
         font-weight: 600;
         white-space: nowrap;
         z-index: ${OVERLAY_STYLES.Z_INDEX + 1};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
 
-      .tooltip-tag { color: #38bdf8; }
-      .tooltip-id { color: #f59e0b; }
-      .tooltip-class { color: #10b981; }
-      .tooltip-dim { color: #94a3b8; font-size: 10px; margin-left: 6px; }
+      .tooltip-tag { color: var(--q-text-accent, #38bdf8); font-weight: 700; }
+      .tooltip-id { color: var(--q-warning, #f59e0b); }
+      .tooltip-class { color: var(--q-success, #10b981); }
+      .tooltip-dim { color: var(--q-text-muted, #94a3b8); font-size: 10px; margin-left: 4px; }
     `;
 
     this.shadowRoot.appendChild(styleTag);
@@ -146,18 +152,18 @@ export class InspectorOverlay {
       const dim = `${Math.round(rect.width)}×${Math.round(rect.height)}px`;
 
       this.tooltip.innerHTML = `
-        <span class="tooltip-tag">${tag}</span>
+        <span class="tooltip-tag">&lt;${tag}&gt;</span>
         <span class="tooltip-id">${id}</span>
         <span class="tooltip-class">${classes}</span>
         <span class="tooltip-dim">${dim}</span>
       `;
 
-      let top = rect.top - 28;
-      if (top < 5) top = rect.bottom + 5;
+      let top = rect.top - 32;
+      if (top < 5) top = rect.bottom + 6;
 
       this.tooltip.style.top = `${top}px`;
-      this.tooltip.style.left = `${Math.max(5, rect.left)}px`;
-      this.tooltip.style.display = 'block';
+      this.tooltip.style.left = `${Math.max(6, rect.left)}px`;
+      this.tooltip.style.display = 'flex';
     });
   }
 

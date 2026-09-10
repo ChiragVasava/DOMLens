@@ -1,8 +1,8 @@
 /**
- * Website Inspector AI - Constants
+ * Qursor++ AI - Constants
  * 
  * Centralized constant definitions used across content scripts, background service worker, and popup.
- * Avoids magic strings and ensures type consistency.
+ * Supports design system tokens and tab architecture.
  */
 
 // Extension Action & Communication Keys
@@ -12,6 +12,7 @@ export const ACTIONS = {
   INSPECT_STATE_CHANGED: 'INSPECT_STATE_CHANGED',
   ELEMENT_SELECTED: 'ELEMENT_SELECTED',
   COPY_TO_CLIPBOARD: 'COPY_TO_CLIPBOARD',
+  THEME_CHANGED: 'THEME_CHANGED',
 };
 
 // Inspector Operating States
@@ -21,27 +22,23 @@ export const INSPECTOR_STATE = {
   SELECTED: 'SELECTED',
 };
 
-// UI Panel Tabs
+// UI Panel Tabs (12 Structured Developer-Focused Tabs)
 export const PANEL_TABS = [
-  { id: 'preview', label: 'Preview', icon: '👁️' },
-  { id: 'general', label: 'General', icon: 'ⓘ' },
+  { id: 'overview', label: 'Overview', icon: 'ⓘ' },
+  { id: 'styles', label: 'Styles', icon: '🎨' },
   { id: 'layout', label: 'Layout', icon: '📐' },
   { id: 'typography', label: 'Typography', icon: '🔤' },
-  { id: 'colors', label: 'Colors', icon: '🎨' },
+  { id: 'colors', label: 'Colors', icon: '💧' },
   { id: 'spacing', label: 'Spacing', icon: '📏' },
   { id: 'border', label: 'Border', icon: '🔲' },
   { id: 'flex', label: 'Flex & Grid', icon: '▦' },
   { id: 'dom', label: 'DOM', icon: '🌲' },
-  { id: 'attributes', label: 'Attributes', icon: '🏷️' },
-  { id: 'html', label: 'HTML', icon: '〈/〉' },
-  { id: 'css', label: 'CSS', icon: '🎨' },
+  { id: 'accessibility', label: 'A11y', icon: '♿' },
+  { id: 'component', label: 'Component', icon: '⚛️' },
+  { id: 'prompt', label: 'AI Prompt', icon: '✨' },
 ];
 
-// Highlight Theme Styling Constants
+// Highlight Theme Styling Constants (Uses Design Tokens in Overlay CSS)
 export const OVERLAY_STYLES = {
-  HOVER_BORDER: '2px solid #3b82f6',
-  HOVER_BG: 'rgba(59, 130, 246, 0.15)',
-  SELECTED_BORDER: '2px solid #10b981',
-  SELECTED_BG: 'rgba(16, 185, 129, 0.15)',
   Z_INDEX: 2147483646,
 };
