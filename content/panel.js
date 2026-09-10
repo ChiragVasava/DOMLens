@@ -547,7 +547,7 @@ export class InspectorPanel {
         this.renderTabContent();
       }
 
-      // Apply Edits
+      // Apply Edits (CSS Style Mutations & Text Content Modifications)
       if (e.target.closest('#applyEditBtn') && this.currentData) {
         const textarea = this.panelContainer.querySelector('#editInstructionArea');
         if (textarea && textarea.value) {
@@ -559,9 +559,19 @@ export class InspectorPanel {
             Object.entries(this.styleEditor.customStyles).forEach(([p, v]) => {
               this.targetElement.style[p] = v;
             });
+
+            if (this.styleEditor.customText) {
+              if (this.targetElement.children.length === 0 || this.targetElement.tagName === 'BUTTON' || this.targetElement.tagName === 'SPAN' || this.targetElement.tagName === 'P' || this.targetElement.tagName === 'A' || this.targetElement.tagName.startsWith('H')) {
+                this.targetElement.textContent = this.styleEditor.customText;
+              }
+              if (this.currentData.general) {
+                this.currentData.general.textContent = this.styleEditor.customText;
+                this.currentData.general.fullOuterHTML = this.targetElement.outerHTML;
+              }
+            }
           }
 
-          this.toastManager.show('✓ Style edits applied! Switching to Live view...', 'success');
+          this.toastManager.show('✓ Edits applied! Switching to Live view...', 'success');
           this.activeTab = 'live';
           this.updateNavTabs();
           this.renderTabContent();
@@ -573,6 +583,13 @@ export class InspectorPanel {
         this.styleEditor.reset();
         this.editInstructionText = '';
         this.toastManager.show('Reset style edits', 'info');
+        this.renderTabContent();
+      }
+
+      // Settings Theme Toggle
+      if (e.target.closest('#settingsThemeToggleBtn')) {
+        const newTheme = this.themeManager.toggleTheme();
+        this.toastManager.show(`✓ Theme set to ${newTheme.toUpperCase()}`, 'success');
         this.renderTabContent();
       }
 
@@ -655,6 +672,15 @@ export class InspectorPanel {
     }
 
     const d = this.currentData;
+    const general = d.general || { tagName: 'DIV', id: 'N/A', classList: [], role: 'N/A', accessibleName: 'N/A', value: 'N/A', textContent: '', fullOuterHTML: '' };
+    const typography = d.typography || { fontFamily: 'system-ui, sans-serif', fontSize: '16px', fontWeight: '400', lineHeight: 'normal', letterSpacing: 'normal', textAlign: 'left', textTransform: 'none' };
+    const colors = d.colors || { color: '#000000', backgroundColor: '#ffffff', hexColor: '#000000', hexBgColor: '#ffffff' };
+    const spacing = d.spacing || { margin: '0px', padding: '0px', gap: '0px' };
+    const layout = d.layout || { display: 'block', position: 'static', zIndex: 'auto', boxSizing: 'border-box' };
+    const dom = d.dom || { parentTag: 'body', parentId: '', depth: 1, childrenCount: 0, childTags: [], previousSiblingTag: 'None', nextSiblingTag: 'None' };
+    const border = d.border || { borderRadius: '0px', borderWidth: '0px', borderStyle: 'none' };
+    const flexGrid = d.flexGrid || { flexDirection: 'N/A', alignItems: 'N/A', justifyContent: 'N/A' };
+    const classes = d.classes || [];
 
     switch (this.activeTab) {
       // 1. Live Tab (Live Component Preview & Zoom Controls)
@@ -678,8 +704,8 @@ export class InspectorPanel {
           </div>
         `;
 
-        let renderableHtml = d.general.fullOuterHTML || '';
-        const lowerTag = (d.general.tagName || '').toLowerCase();
+        let renderableHtml = general.fullOuterHTML || '';
+        const lowerTag = (general.tagName || '').toLowerCase();
         if (lowerTag === 'td' || lowerTag === 'th') {
           renderableHtml = `<table style="width:${targetWidth}px; border-collapse:collapse;"><tbody><tr>${renderableHtml}</tr></tbody></table>`;
         } else if (lowerTag === 'tr') {
@@ -724,39 +750,40 @@ export class InspectorPanel {
       // 2. Overview Tab (2nd Feature: Detailed Element Metrics)
       case 'overview': {
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>ⓘ Detailed Overview & Metrics</span></div>`;
-        const hexColor = (d.colors && d.colors.hexColor) ? d.colors.hexColor : rgbToHex(d.colors ? d.colors.color : '') || '#000000';
-        const hexBg = (d.colors && d.colors.hexBgColor) ? d.colors.hexBgColor : rgbToHex(d.colors ? d.colors.backgroundColor : '') || '#FFFFFF';
+        const hexColor = colors.hexColor || rgbToHex(colors.color) || '#000000';
+        const hexBg = colors.hexBgColor || rgbToHex(colors.backgroundColor) || '#FFFFFF';
+        const fontFam = (typography.fontFamily || 'system-ui').split(',')[0].replace(/['"]/g, '');
 
         body.innerHTML = `
           <div class="section-label-row">
             <span>ELEMENT SUMMARY</span>
-            <span class="node-badge">&lt;${d.tag}&gt;</span>
+            <span class="node-badge">&lt;${d.tag || 'DIV'}&gt;</span>
           </div>
 
           <!-- General Attributes Card -->
           <div class="qursor-card">
             <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">General Attributes</div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Tag Name</span><span class="prop-value">&lt;${d.general.tagName}&gt;</span></div>
-              <div class="prop-row"><span class="prop-label">Element ID</span><span class="prop-value">${escapeHtml(d.general.id)}</span></div>
-              <div class="prop-row"><span class="prop-label">CSS Classes</span><span class="prop-value">${d.classes.length ? escapeHtml(d.classes.join(', ')) : 'None'}</span></div>
-              <div class="prop-row"><span class="prop-label">ARIA Role</span><span class="prop-value">${escapeHtml(d.general.role)}</span></div>
-              <div class="prop-row"><span class="prop-label">Accessible Name</span><span class="prop-value">${escapeHtml(d.general.accessibleName || 'N/A')}</span></div>
-              <div class="prop-row"><span class="prop-label">Value / Input</span><span class="prop-value">${escapeHtml(d.general.value)}</span></div>
+              <div class="prop-row"><span class="prop-label">Tag Name</span><span class="prop-value">&lt;${general.tagName || 'DIV'}&gt;</span></div>
+              <div class="prop-row"><span class="prop-label">Element ID</span><span class="prop-value">${escapeHtml(general.id || 'N/A')}</span></div>
+              <div class="prop-row"><span class="prop-label">CSS Classes</span><span class="prop-value">${classes.length ? escapeHtml(classes.join(', ')) : 'None'}</span></div>
+              <div class="prop-row"><span class="prop-label">ARIA Role</span><span class="prop-value">${escapeHtml(general.role || 'N/A')}</span></div>
+              <div class="prop-row"><span class="prop-label">Accessible Name</span><span class="prop-value">${escapeHtml(general.accessibleName || 'N/A')}</span></div>
+              <div class="prop-row"><span class="prop-label">Value / Input</span><span class="prop-value">${escapeHtml(general.value || 'N/A')}</span></div>
             </div>
           </div>
 
           <!-- Typography & Colors Card -->
           <div class="qursor-card">
             <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Typography & Color Palette</div>
-            <div class="specimen-preview-box" style="font-family:${d.typography.fontFamily}; font-size:${d.typography.fontSize}; font-weight:${d.typography.fontWeight}; color:${hexColor}; background:${hexBg}; padding:10px; border-radius:6px; border:1px solid var(--q-border); margin-bottom:8px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-              ${escapeHtml(d.general.textContent ? d.general.textContent.substring(0, 40) : 'AaBbCcDdEeFfGg 12345')}
+            <div class="specimen-preview-box" style="font-family:${typography.fontFamily || 'sans-serif'}; font-size:${typography.fontSize || '16px'}; font-weight:${typography.fontWeight || '400'}; color:${hexColor}; background:${hexBg}; padding:10px; border-radius:6px; border:1px solid var(--q-border); margin-bottom:8px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${escapeHtml(general.textContent ? general.textContent.substring(0, 40) : 'AaBbCcDdEeFfGg 12345')}
             </div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${escapeHtml(d.typography.fontFamily.split(',')[0].replace(/['"]/g, ''))}</span></div>
-              <div class="prop-row"><span class="prop-label">Font Size / Weight</span><span class="prop-value">${d.typography.fontSize} • ${d.typography.fontWeight}</span></div>
-              <div class="prop-row"><span class="prop-label">Line / Word Space</span><span class="prop-value">${d.typography.lineHeight || 'normal'} / ${d.typography.letterSpacing || 'normal'}</span></div>
-              <div class="prop-row"><span class="prop-label">Text Align / Transform</span><span class="prop-value">${d.typography.textAlign || 'left'} / ${d.typography.textTransform || 'none'}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${escapeHtml(fontFam)}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Size / Weight</span><span class="prop-value">${typography.fontSize || '16px'} • ${typography.fontWeight || '400'}</span></div>
+              <div class="prop-row"><span class="prop-label">Line / Word Space</span><span class="prop-value">${typography.lineHeight || 'normal'} / ${typography.letterSpacing || 'normal'}</span></div>
+              <div class="prop-row"><span class="prop-label">Text Align / Transform</span><span class="prop-value">${typography.textAlign || 'left'} / ${typography.textTransform || 'none'}</span></div>
               <div class="prop-row"><span class="prop-label">Text Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hexColor}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hexColor}; border:1px solid rgba(128,128,128,0.3); display:inline-block; vertical-align:middle; margin-right:4px;"></span> ${hexColor} 📋</span></div>
               <div class="prop-row"><span class="prop-label">Background Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hexBg}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hexBg}; border:1px solid rgba(128,128,128,0.3); display:inline-block; vertical-align:middle; margin-right:4px;"></span> ${hexBg} 📋</span></div>
             </div>
@@ -767,21 +794,21 @@ export class InspectorPanel {
             <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">Layout & Box Model Spacing</div>
             <div class="spacing-diagram" style="margin-bottom:8px;">
               <div class="margin-box" style="padding:6px; background:rgba(249, 115, 22, 0.1); border:1px dashed #f97316; border-radius:6px; font-size:9px; text-align:center; color:var(--q-text-primary);">
-                <div style="font-weight:600; margin-bottom:4px;">MARGIN: ${d.spacing.margin || '0px'}</div>
+                <div style="font-weight:600; margin-bottom:4px;">MARGIN: ${spacing.margin || '0px'}</div>
                 <div class="padding-box" style="padding:6px; background:rgba(34, 197, 94, 0.1); border:1px dashed #22c55e; border-radius:4px;">
-                  <div style="font-weight:600; margin-bottom:4px;">PADDING: ${d.spacing.padding || '0px'}</div>
+                  <div style="font-weight:600; margin-bottom:4px;">PADDING: ${spacing.padding || '0px'}</div>
                   <div class="element-box" style="padding:4px; background:var(--q-bg-surface-elevated); border:1px solid var(--q-border); border-radius:3px; font-weight:700;">
-                    &lt;${d.tag}&gt; ${d.widthPx}×${d.heightPx}px
+                    &lt;${d.tag || 'DIV'}&gt; ${d.widthPx || 0}×${d.heightPx || 0}px
                   </div>
                 </div>
               </div>
             </div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Display Mode</span><span class="prop-value">${d.layout.display || 'block'}</span></div>
-              <div class="prop-row"><span class="prop-label">Position / Z-Index</span><span class="prop-value">${d.layout.position || 'static'} (z: ${d.layout.zIndex || 'auto'})</span></div>
-              <div class="prop-row"><span class="prop-label">Flex Direction</span><span class="prop-value">${(d.flexGrid && d.flexGrid.flexDirection) ? d.flexGrid.flexDirection : 'N/A'}</span></div>
-              <div class="prop-row"><span class="prop-label">Flex Align / Justify</span><span class="prop-value">${(d.flexGrid && d.flexGrid.alignItems) ? d.flexGrid.alignItems : 'N/A'} / ${(d.flexGrid && d.flexGrid.justifyContent) ? d.flexGrid.justifyContent : 'N/A'}</span></div>
-              <div class="prop-row"><span class="prop-label">Gap / Box Sizing</span><span class="prop-value">${d.spacing.gap || '0px'} / ${d.layout.boxSizing || 'border-box'}</span></div>
+              <div class="prop-row"><span class="prop-label">Display Mode</span><span class="prop-value">${layout.display || 'block'}</span></div>
+              <div class="prop-row"><span class="prop-label">Position / Z-Index</span><span class="prop-value">${layout.position || 'static'} (z: ${layout.zIndex || 'auto'})</span></div>
+              <div class="prop-row"><span class="prop-label">Flex Direction</span><span class="prop-value">${flexGrid.flexDirection || 'N/A'}</span></div>
+              <div class="prop-row"><span class="prop-label">Flex Align / Justify</span><span class="prop-value">${flexGrid.alignItems || 'N/A'} / ${flexGrid.justifyContent || 'N/A'}</span></div>
+              <div class="prop-row"><span class="prop-label">Gap / Box Sizing</span><span class="prop-value">${spacing.gap || '0px'} / ${layout.boxSizing || 'border-box'}</span></div>
             </div>
           </div>
 
@@ -789,12 +816,12 @@ export class InspectorPanel {
           <div class="qursor-card">
             <div style="font-weight:700; font-size:11px; margin-bottom:6px; color:var(--q-text-primary);">DOM Hierarchy & Selectors</div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Parent Tag</span><span class="prop-value">&lt;${d.dom.parentTag || 'N/A'}&gt; ${d.dom.parentId ? '#' + escapeHtml(d.dom.parentId) : ''}</span></div>
-              <div class="prop-row"><span class="prop-label">DOM Tree Depth</span><span class="prop-value">Level ${d.dom.depth || 1}</span></div>
-              <div class="prop-row"><span class="prop-label">Child Element Count</span><span class="prop-value">${d.dom.childrenCount || 0} nodes ${d.dom.childTags && d.dom.childTags.length ? '(' + escapeHtml(d.dom.childTags.join(', ')) + ')' : ''}</span></div>
-              <div class="prop-row"><span class="prop-label">Siblings (Prev / Next)</span><span class="prop-value">&lt;${d.dom.previousSiblingTag || 'None'}&gt; / &lt;${d.dom.nextSiblingTag || 'None'}&gt;</span></div>
-              <div class="prop-row"><span class="prop-label">CSS Selector</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.selector)}" style="cursor:pointer;">${escapeHtml(d.selector)} 📋</span></div>
-              <div class="prop-row"><span class="prop-label">XPath</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.xpath)}" style="cursor:pointer;">${escapeHtml(d.xpath)} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">Parent Tag</span><span class="prop-value">&lt;${dom.parentTag || 'N/A'}&gt; ${dom.parentId ? '#' + escapeHtml(dom.parentId) : ''}</span></div>
+              <div class="prop-row"><span class="prop-label">DOM Tree Depth</span><span class="prop-value">Level ${dom.depth || 1}</span></div>
+              <div class="prop-row"><span class="prop-label">Child Element Count</span><span class="prop-value">${dom.childrenCount || 0} nodes ${dom.childTags && dom.childTags.length ? '(' + escapeHtml(dom.childTags.join(', ')) + ')' : ''}</span></div>
+              <div class="prop-row"><span class="prop-label">Siblings (Prev / Next)</span><span class="prop-value">&lt;${dom.previousSiblingTag || 'None'}&gt; / &lt;${dom.nextSiblingTag || 'None'}&gt;</span></div>
+              <div class="prop-row"><span class="prop-label">CSS Selector</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.selector || '')}" style="cursor:pointer;">${escapeHtml(d.selector || 'N/A')} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">XPath</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.xpath || '')}" style="cursor:pointer;">${escapeHtml(d.xpath || 'N/A')} 📋</span></div>
             </div>
           </div>
         `;
@@ -841,7 +868,7 @@ export class InspectorPanel {
 
           <div class="qursor-card">
             <div class="prop-row" style="font-size:10px; color:var(--q-text-muted);">
-              <span>${d.widthPx}×${d.heightPx} • ${d.dom.childCount || 1} nodes • ${this.codeFormat.toUpperCase()}</span>
+              <span>${d.widthPx || 0}×${d.heightPx || 0} • ${dom.childrenCount || 0} nodes • ${this.codeFormat.toUpperCase()}</span>
               <div style="display:flex; gap:4px;">
                 <button class="icon-action-btn copy-action-trigger" data-copy-text="${escapeHtml(codeText)}" title="Copy Code">📋 Copy</button>
                 <button class="icon-action-btn download-action-trigger" title="Download File">↓ Download</button>
@@ -855,23 +882,23 @@ export class InspectorPanel {
 
       // 4. Edit Tab (4th Feature: Interactive Property Mutation & Instruction Parser)
       case 'edit': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>▾ Edit & Annotate &lt;${d.tag.toLowerCase()}&gt;</span></div>`;
-        const hex = rgbToHex(d.colors.color) || '#ffffff';
-        const bgHex = rgbToHex(d.colors.backgroundColor) || '#000000';
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>▾ Edit & Annotate &lt;${(d.tag || 'div').toLowerCase()}&gt;</span></div>`;
+        const hex = colors.hexColor || rgbToHex(colors.color) || '#ffffff';
+        const bgHex = colors.hexBgColor || rgbToHex(colors.backgroundColor) || '#000000';
 
         body.innerHTML = `
           <div class="qursor-card">
             <div style="font-weight:700; font-size:11px;">Direct Style Modifications</div>
             <div class="prop-row"><span class="prop-label">color:</span><input type="text" class="edit-prop-input" data-style-prop="color" style="width:100px; text-align:right;" value="${hex}" /></div>
             <div class="prop-row"><span class="prop-label">background-color:</span><input type="text" class="edit-prop-input" data-style-prop="backgroundColor" style="width:100px; text-align:right;" value="${bgHex}" /></div>
-            <div class="prop-row"><span class="prop-label">font-size:</span><input type="text" class="edit-prop-input" data-style-prop="fontSize" style="width:100px; text-align:right;" value="${d.typography.fontSize}" /></div>
-            <div class="prop-row"><span class="prop-label">font-weight:</span><input type="text" class="edit-prop-input" data-style-prop="fontWeight" style="width:100px; text-align:right;" value="${d.typography.fontWeight}" /></div>
-            <div class="prop-row"><span class="prop-label">border-radius:</span><input type="text" class="edit-prop-input" data-style-prop="borderRadius" style="width:100px; text-align:right;" value="${d.border.borderRadius}" /></div>
+            <div class="prop-row"><span class="prop-label">font-size:</span><input type="text" class="edit-prop-input" data-style-prop="fontSize" style="width:100px; text-align:right;" value="${typography.fontSize || '16px'}" /></div>
+            <div class="prop-row"><span class="prop-label">font-weight:</span><input type="text" class="edit-prop-input" data-style-prop="fontWeight" style="width:100px; text-align:right;" value="${typography.fontWeight || '400'}" /></div>
+            <div class="prop-row"><span class="prop-label">border-radius:</span><input type="text" class="edit-prop-input" data-style-prop="borderRadius" style="width:100px; text-align:right;" value="${border.borderRadius || '0px'}" /></div>
           </div>
 
           <div class="qursor-card">
             <div style="font-weight:700; font-size:11px;">Natural Language CSS Instruction</div>
-            <textarea id="editInstructionArea" style="width:100%; min-height:50px; background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:6px; font-size:11px;" placeholder="e.g. Make background blue, set font size to 24px...">${escapeHtml(this.editInstructionText)}</textarea>
+            <textarea id="editInstructionArea" style="width:100%; min-height:50px; background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:6px; font-size:11px;" placeholder="e.g. Make background blue, change text from x to y...">${escapeHtml(this.editInstructionText)}</textarea>
             <div style="display:flex; justify-content:flex-end; gap:6px;">
               <button class="q-btn" id="resetEditBtn">Reset</button>
               <button class="q-btn q-btn-primary" id="applyEditBtn">Apply Edits</button>

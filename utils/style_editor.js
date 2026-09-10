@@ -8,6 +8,7 @@
 export class StyleEditor {
   constructor() {
     this.customStyles = {};
+    this.customText = null;
   }
 
   /**
@@ -15,6 +16,7 @@ export class StyleEditor {
    */
   reset() {
     this.customStyles = {};
+    this.customText = null;
   }
 
   /**
@@ -28,28 +30,50 @@ export class StyleEditor {
   }
 
   /**
-   * Parses natural language instruction string and applies CSS modifications
-   * @param {string} instruction Text input e.g. "make background blue"
+   * Parses natural language instruction string and applies CSS & Text modifications
+   * @param {string} instruction Text input e.g. "make background blue", "change text from x to y", "set text to Hello World"
    * @returns {Object} Updated styles map
    */
   parseAndApplyInstruction(instruction) {
     if (!instruction || typeof instruction !== 'string') return this.customStyles;
 
     const text = instruction.toLowerCase().trim();
+    const rawInstruction = instruction.trim();
 
-    // Background Color
+    // 1. Text Content Modification Parser
+    if (text.includes('change text') || text.includes('replace text') || text.includes('set text') || text.includes('text:')) {
+      let newText = null;
+      
+      // Match: "change text from X to Y" / "replace text from X to Y" / "change text X to Y"
+      const fromToMatch = rawInstruction.match(/(?:change|replace)\s+text\s+(?:from\s+['"]?.*['"]?\s+)?to\s+['"]?([^'"]+)['"]?/i);
+      if (fromToMatch && fromToMatch[1]) {
+        newText = fromToMatch[1].trim();
+      } else {
+        // Match: "set text to Y" / "change text to Y" / "text: Y"
+        const toMatch = rawInstruction.match(/(?:text\s*:\s*|to\s+)(.+)$/i);
+        if (toMatch && toMatch[1]) {
+          newText = toMatch[1].trim().replace(/^['"]|['"]$/g, '');
+        }
+      }
+
+      if (newText) {
+        this.customText = newText;
+      }
+    }
+
+    // 2. Background Color
     if (text.includes('background')) {
       const color = extractColorName(text);
       if (color) this.setStyle('backgroundColor', color);
     }
 
-    // Text Color
-    if (text.includes('text color') || text.includes('color') || text.includes('font color')) {
+    // 3. Text Color
+    if (text.includes('text color') || text.includes('font color') || (text.includes('color') && !text.includes('change text') && !text.includes('replace text'))) {
       const color = extractColorName(text);
       if (color) this.setStyle('color', color);
     }
 
-    // Font Size
+    // 4. Font Size
     if (text.includes('font size') || text.includes('size')) {
       const match = text.match(/\d+(px|em|rem|%)/) || text.match(/\b\d+\b/);
       if (match) {
@@ -58,14 +82,14 @@ export class StyleEditor {
       }
     }
 
-    // Font Weight / Bold
+    // 5. Font Weight / Bold
     if (text.includes('bold') || text.includes('weight')) {
       if (text.includes('bold')) this.setStyle('fontWeight', '700');
       else if (text.includes('normal')) this.setStyle('fontWeight', '400');
       else if (text.includes('light')) this.setStyle('fontWeight', '300');
     }
 
-    // Width
+    // 6. Width
     if (text.includes('width')) {
       const match = text.match(/\d+(px|%|vw)/) || text.match(/\b\d+\b/);
       if (match) {
@@ -74,7 +98,7 @@ export class StyleEditor {
       }
     }
 
-    // Height
+    // 7. Height
     if (text.includes('height')) {
       const match = text.match(/\d+(px|%|vh)/) || text.match(/\b\d+\b/);
       if (match) {
@@ -83,7 +107,7 @@ export class StyleEditor {
       }
     }
 
-    // Padding
+    // 8. Padding
     if (text.includes('padding')) {
       const match = text.match(/\d+(px|em)/) || text.match(/\b\d+\b/);
       if (match) {
@@ -92,7 +116,7 @@ export class StyleEditor {
       }
     }
 
-    // Margin
+    // 9. Margin
     if (text.includes('margin')) {
       const match = text.match(/\d+(px|em)/) || text.match(/\b\d+\b/);
       if (match) {
@@ -101,7 +125,7 @@ export class StyleEditor {
       }
     }
 
-    // Border Radius
+    // 10. Border Radius
     if (text.includes('border radius') || text.includes('radius') || text.includes('rounded')) {
       const match = text.match(/\d+(px|%)/) || text.match(/\b\d+\b/);
       if (match) {

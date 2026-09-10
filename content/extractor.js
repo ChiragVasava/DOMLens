@@ -96,17 +96,26 @@ export function extractElementData(element) {
 export function getPageStylesheets() {
   const styles = [];
 
-  document.querySelectorAll('style').forEach(styleTag => {
-    if (styleTag.textContent && !styleTag.closest('#website-inspector-root')) {
-      styles.push(`<style>${styleTag.textContent}</style>`);
-    }
-  });
-
   document.querySelectorAll('link[rel="stylesheet"]').forEach(linkTag => {
-    if (linkTag.href) {
+    if (linkTag.href && !linkTag.href.includes('chrome-extension://')) {
       styles.push(`<link rel="stylesheet" href="${linkTag.href}">`);
     }
   });
+
+  let totalInlineBytes = 0;
+  const MAX_INLINE_BYTES = 50000;
+
+  const styleTags = document.querySelectorAll('style');
+  for (let i = 0; i < styleTags.length; i++) {
+    const styleTag = styleTags[i];
+    if (styleTag.closest('#website-inspector-root')) continue;
+    const text = styleTag.textContent || '';
+    if (text.length > 0 && totalInlineBytes < MAX_INLINE_BYTES) {
+      const chunk = text.length > 10000 ? text.substring(0, 10000) : text;
+      styles.push(`<style>${chunk}</style>`);
+      totalInlineBytes += chunk.length;
+    }
+  }
 
   return styles.join('\n');
 }

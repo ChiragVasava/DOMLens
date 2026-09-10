@@ -46,12 +46,12 @@ export function extractElementAssets(element) {
     }
   });
 
-  // 2. Scan Element & Descendants for CSS Background Images
-  const allNodes = [element, ...Array.from(element.querySelectorAll('*'))];
+  // 2. Scan Element & Descendants for CSS Background Images (limit scan to max 50 nodes to prevent layout reflow lag)
+  const allNodes = [element, ...Array.from(element.querySelectorAll('*')).slice(0, 50)];
   allNodes.forEach(node => {
-    const cs = window.getComputedStyle(node);
-    if (cs && cs.backgroundImage && cs.backgroundImage !== 'none') {
-      const matches = cs.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/g);
+    const inlineBg = node.style && node.style.backgroundImage;
+    if (inlineBg && inlineBg !== 'none') {
+      const matches = inlineBg.match(/url\(['"]?(.*?)['"]?\)/g);
       if (matches) {
         matches.forEach(m => {
           const cleanUrl = m.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
@@ -60,6 +60,20 @@ export function extractElementAssets(element) {
             addAsset(cleanUrl, 'IMAGE', cat, `Background ${cat}`, getAssetFilename(cleanUrl));
           }
         });
+      }
+    } else if (node.className && typeof node.className === 'string' && (node.className.includes('bg-') || node.className.includes('thumb') || node.className.includes('hero') || node.className.includes('banner'))) {
+      const cs = window.getComputedStyle(node);
+      if (cs && cs.backgroundImage && cs.backgroundImage !== 'none') {
+        const matches = cs.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/g);
+        if (matches) {
+          matches.forEach(m => {
+            const cleanUrl = m.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
+            if (cleanUrl) {
+              const cat = getCategoryFromUrl(cleanUrl);
+              addAsset(cleanUrl, 'IMAGE', cat, `Background ${cat}`, getAssetFilename(cleanUrl));
+            }
+          });
+        }
       }
     }
   });
