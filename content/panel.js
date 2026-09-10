@@ -1,16 +1,12 @@
 /**
- * Qursor++ - Floating Information Panel UI (Master Stabilized Implementation)
+ * Qursor++ - Floating Information Panel UI (Master Robust Implementation)
  * 
- * Production-grade floating panel containing all 7 ordered feature tabs:
- * 1. Live (Live Component Preview & Zoom Controls)
- * 2. Overview (Detailed Element Metrics & Telemetry)
- * 3. Code (HTML Only, CSS Only, JS Only, HTML+CSS+JS, React, Vue, Angular, Tailwind)
- * 4. Edit (Natural Language Instruction Parser & Interactive Style Editor)
- * 5. Assets (Full Subtree Scanner with All / By Type Filtering & YouTube Thumbnails)
- * 6. Prompt (Structured AI Prompt Builder for LLM Coding Agents)
- * 7. Settings (Theme Switcher & Extension Preferences)
+ * Re-architected with full event delegation, host site event propagation shields,
+ * overflow text wrapping, interactive live style editor, zoom controls, asset scanner,
+ * and multi-format code exporter.
  */
 
+import { QURSOR_NAV_TABS } from '../utils/constants.js';
 import { copyToClipboard } from '../utils/clipboard.js';
 import { DESIGN_TOKENS, ThemeManager, THEMES } from '../utils/theme.js';
 import { ToastManager } from '../utils/toast.js';
@@ -18,16 +14,6 @@ import { generateComponentCode, CODE_FORMATS } from '../utils/component_generato
 import { generateStructuredAiPrompt } from '../utils/prompt_generator.js';
 import { extractElementAssets, filterAssets } from '../utils/asset_extractor.js';
 import { StyleEditor } from '../utils/style_editor.js';
-
-export const QURSOR_NAV_TABS = [
-  { id: 'live', label: 'Live', icon: '👁️' },
-  { id: 'overview', label: 'Overview', icon: 'ⓘ' },
-  { id: 'code', label: 'Code', icon: '📄' },
-  { id: 'edit', label: 'Edit', icon: '💬' },
-  { id: 'assets', label: 'Assets', icon: '🖼️' },
-  { id: 'prompt', label: 'Prompt', icon: '👤' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
-];
 
 export class InspectorPanel {
   constructor(shadowRoot) {
@@ -44,7 +30,7 @@ export class InspectorPanel {
     this.codeStyles = 'Computed'; // 'Computed' | 'Classes'
 
     // Assets tab state
-    this.assetFilter = 'All'; // 'All' | 'Images' | 'SVG' | 'PNG' | 'JPG' | 'WEBP' | 'GIF' | 'Other'
+    this.assetFilter = 'All';
 
     // Edit tab state
     this.styleEditor = new StyleEditor();
@@ -65,9 +51,6 @@ export class InspectorPanel {
     this.createPanelDOM();
   }
 
-  /**
-   * Constructs HTML structure and styles for the floating panel inside Shadow DOM
-   */
   createPanelDOM() {
     const style = document.createElement('style');
     style.textContent = `
@@ -97,7 +80,7 @@ export class InspectorPanel {
         transition: background 0.2s, border-color 0.2s;
       }
 
-      /* Top Icon Navigation Header Bar */
+      /* Navigation Header */
       .qursor-icon-navbar {
         display: flex;
         align-items: center;
@@ -279,9 +262,11 @@ export class InspectorPanel {
         display: flex;
         flex-direction: column;
         gap: 8px;
+        box-sizing: border-box;
+        overflow: hidden;
       }
 
-      /* Grid Property Table */
+      /* Grid Property Table with Strict Text Wrapping */
       .prop-grid {
         display: flex;
         flex-direction: column;
@@ -293,16 +278,35 @@ export class InspectorPanel {
         justify-content: space-between;
         align-items: center;
         font-size: 11px;
+        gap: 8px;
       }
 
-      .prop-label { color: var(--q-text-muted); font-weight: 500; }
-      .prop-value { color: var(--q-text-primary); font-weight: 600; font-family: SFMono-Regular, Consolas, monospace; display: flex; align-items: center; gap: 4px; }
+      .prop-label { 
+        color: var(--q-text-muted); 
+        font-weight: 500;
+        min-width: 90px;
+        flex-shrink: 0;
+      }
+
+      .prop-value { 
+        color: var(--q-text-primary); 
+        font-weight: 600; 
+        font-family: SFMono-Regular, Consolas, monospace; 
+        display: flex; 
+        align-items: center; 
+        gap: 4px;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        max-width: 220px;
+        text-align: right;
+        justify-content: flex-end;
+      }
 
       /* Checkerboard Asset Box */
       .asset-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 8px;
       }
 
       .asset-card-item {
@@ -314,6 +318,7 @@ export class InspectorPanel {
         flex-direction: column;
         gap: 4px;
         align-items: center;
+        box-sizing: border-box;
       }
 
       .asset-preview-card {
@@ -447,6 +452,13 @@ export class InspectorPanel {
     const themeToggleBtn = this.panelContainer.querySelector('#themeToggleBtn');
     const navGroup = this.panelContainer.querySelector('.navbar-icons-group');
 
+    // Host Site Event Propagation Shield (Prevents GitHub/YouTube shortcuts from hijacking inputs inside panel)
+    ['click', 'mousedown', 'mouseup', 'keydown', 'keyup', 'keypress', 'input', 'change'].forEach(evtType => {
+      this.panelContainer.addEventListener(evtType, (e) => {
+        e.stopPropagation();
+      });
+    });
+
     // Dragging Logic
     header.addEventListener('mousedown', (e) => {
       if (e.target.closest('.nav-icon-btn') || e.target.closest('.nav-action-btn')) return;
@@ -501,9 +513,8 @@ export class InspectorPanel {
       this.renderTabContent();
     });
 
-    // Body Delegated Event Handlers
-    const body = this.panelContainer.querySelector('#panelBody');
-    body.addEventListener('click', async (e) => {
+    // Delegated Event Listener on Entire Panel Container (Handles Header, TriggerBar & Body Clicks)
+    this.panelContainer.addEventListener('click', async (e) => {
       const segBtn = e.target.closest('.segment-btn');
       const zoomBtn = e.target.closest('.zoom-btn');
       const copyBtn = e.target.closest('.copy-action-trigger');
@@ -519,7 +530,7 @@ export class InspectorPanel {
         this.renderTabContent();
       }
 
-      // Zoom Feature Handler in Live Preview Tab
+      // Zoom Controls (In, Out, Fit, Reset)
       if (zoomBtn && this.currentData) {
         const action = zoomBtn.dataset.zoomAction;
         const targetWidth = this.currentData.widthPx && this.currentData.widthPx > 50 ? this.currentData.widthPx : 420;
@@ -536,26 +547,36 @@ export class InspectorPanel {
         this.renderTabContent();
       }
 
-      // Edit Instruction Apply Button
+      // Apply Edits
       if (e.target.closest('#applyEditBtn') && this.currentData) {
-        const textarea = body.querySelector('#editInstructionArea');
+        const textarea = this.panelContainer.querySelector('#editInstructionArea');
         if (textarea && textarea.value) {
           this.editInstructionText = textarea.value;
           this.styleEditor.parseAndApplyInstruction(textarea.value);
           this.currentData.rawCss = this.styleEditor.applyToRawCss(this.currentData.rawCss);
-          this.toastManager.show('✓ Applied style edits to preview!', 'success');
+          
+          if (this.targetElement) {
+            Object.entries(this.styleEditor.customStyles).forEach(([p, v]) => {
+              this.targetElement.style[p] = v;
+            });
+          }
+
+          this.toastManager.show('✓ Style edits applied! Switching to Live view...', 'success');
+          this.activeTab = 'live';
+          this.updateNavTabs();
           this.renderTabContent();
         }
       }
 
-      // Edit Reset Button
+      // Reset Edits
       if (e.target.closest('#resetEditBtn')) {
         this.styleEditor.reset();
         this.editInstructionText = '';
-        this.toastManager.show('Reset edits', 'info');
+        this.toastManager.show('Reset style edits', 'info');
         this.renderTabContent();
       }
 
+      // Copy Action
       if (copyBtn && this.currentData) {
         const text = copyBtn.dataset.copyText;
         if (text) {
@@ -564,6 +585,7 @@ export class InspectorPanel {
         }
       }
 
+      // Download Action
       if (downloadBtn && this.currentData) {
         const content = generateComponentCode(this.currentData, this.codeFormat);
         const ext = this.codeFormat === CODE_FORMATS.REACT ? 'jsx' : (this.codeFormat === CODE_FORMATS.VUE ? 'vue' : (this.codeFormat === CODE_FORMATS.CSS_ONLY ? 'css' : 'html'));
@@ -572,16 +594,36 @@ export class InspectorPanel {
       }
     });
 
-    body.addEventListener('input', (e) => {
+    this.panelContainer.addEventListener('input', (e) => {
       if (e.target.classList.contains('edit-prop-input')) {
         const prop = e.target.dataset.styleProp;
         const val = e.target.value;
         if (prop && val) {
           this.styleEditor.setStyle(prop, val);
           this.currentData.rawCss = this.styleEditor.applyToRawCss(this.currentData.rawCss);
+          if (this.targetElement) {
+            this.targetElement.style[prop] = val;
+          }
         }
       }
     });
+
+    this.panelContainer.addEventListener('change', (e) => {
+      if (e.target.classList.contains('prompt-target-select')) {
+        this.promptFrameworkTarget = e.target.value;
+        this.editedPromptText = null;
+        this.renderTabContent();
+      }
+    });
+  }
+
+  updateNavTabs() {
+    const navGroup = this.panelContainer.querySelector('.navbar-icons-group');
+    if (navGroup) {
+      navGroup.querySelectorAll('.nav-icon-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === this.activeTab);
+      });
+    }
   }
 
   updateData(data, element = null) {
@@ -615,7 +657,7 @@ export class InspectorPanel {
     const d = this.currentData;
 
     switch (this.activeTab) {
-      // 1. Live Tab (Live Component Preview & Zoom)
+      // 1. Live Tab (Live Component Preview & Zoom Controls)
       case 'live': {
         const targetWidth = d.widthPx && d.widthPx > 50 ? d.widthPx : 420;
         const targetHeight = d.heightPx && d.heightPx > 50 ? d.heightPx : 300;
@@ -631,7 +673,7 @@ export class InspectorPanel {
               <button class="zoom-btn" data-zoom-action="fit" title="Fit Scale">Fit</button>
               <button class="zoom-btn" data-zoom-action="reset" title="100% Size">100%</button>
               <button class="zoom-btn" data-zoom-action="in" title="Zoom In">+</button>
-              <span style="font-size:9px; background:var(--q-bg-surface-elevated); padding:2px 5px; border-radius:4px;">${scalePercent}%</span>
+              <span style="font-size:9px; background:var(--q-bg-surface-elevated); padding:2px 5px; border-radius:4px; font-weight:700;">${scalePercent}%</span>
             </div>
           </div>
         `;
@@ -695,11 +737,11 @@ export class InspectorPanel {
           <div class="qursor-card">
             <div class="prop-grid">
               <div class="prop-row"><span class="prop-label">Tag Name</span><span class="prop-value">&lt;${d.general.tagName}&gt;</span></div>
-              <div class="prop-row"><span class="prop-label">Element ID</span><span class="prop-value">${d.general.id}</span></div>
-              <div class="prop-row"><span class="prop-label">CSS Classes</span><span class="prop-value">${d.classes.length ? d.classes.join(', ') : 'None'}</span></div>
-              <div class="prop-row"><span class="prop-label">ARIA Role</span><span class="prop-value">${d.general.role}</span></div>
-              <div class="prop-row"><span class="prop-label">Accessible Name</span><span class="prop-value">${d.general.accessibleName || 'N/A'}</span></div>
-              <div class="prop-row"><span class="prop-label">Value / Input</span><span class="prop-value">${d.general.value}</span></div>
+              <div class="prop-row"><span class="prop-label">Element ID</span><span class="prop-value">${escapeHtml(d.general.id)}</span></div>
+              <div class="prop-row"><span class="prop-label">CSS Classes</span><span class="prop-value">${d.classes.length ? escapeHtml(d.classes.join(', ')) : 'None'}</span></div>
+              <div class="prop-row"><span class="prop-label">ARIA Role</span><span class="prop-value">${escapeHtml(d.general.role)}</span></div>
+              <div class="prop-row"><span class="prop-label">Accessible Name</span><span class="prop-value">${escapeHtml(d.general.accessibleName || 'N/A')}</span></div>
+              <div class="prop-row"><span class="prop-label">Value / Input</span><span class="prop-value">${escapeHtml(d.general.value)}</span></div>
             </div>
           </div>
 
@@ -710,7 +752,7 @@ export class InspectorPanel {
               AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz
             </div>
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${d.typography.fontFamily.split(',')[0].replace(/['"]/g, '')}</span></div>
+              <div class="prop-row"><span class="prop-label">Font Family</span><span class="prop-value">${escapeHtml(d.typography.fontFamily.split(',')[0].replace(/['"]/g, ''))}</span></div>
               <div class="prop-row"><span class="prop-label">Font Size</span><span class="prop-value">${d.typography.fontSize}</span></div>
               <div class="prop-row"><span class="prop-label">Text Color</span><span class="prop-value copy-action-trigger" data-copy-text="${hex}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${hex}; display:inline-block;"></span> ${hex} 📋</span></div>
               <div class="prop-row"><span class="prop-label">Background</span><span class="prop-value copy-action-trigger" data-copy-text="${bgHex}" style="cursor:pointer;"><span style="width:10px; height:10px; border-radius:2px; background:${bgHex}; display:inline-block;"></span> ${bgHex} 📋</span></div>
@@ -733,8 +775,8 @@ export class InspectorPanel {
           <!-- DOM & Selectors -->
           <div class="qursor-card">
             <div class="prop-grid">
-              <div class="prop-row"><span class="prop-label">CSS Selector</span><span class="prop-value copy-action-trigger" data-copy-text="${d.selector}" style="cursor:pointer;">${d.selector} 📋</span></div>
-              <div class="prop-row"><span class="prop-label">XPath</span><span class="prop-value copy-action-trigger" data-copy-text="${d.xpath}" style="cursor:pointer;">${d.xpath} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">CSS Selector</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.selector)}" style="cursor:pointer;">${escapeHtml(d.selector)} 📋</span></div>
+              <div class="prop-row"><span class="prop-label">XPath</span><span class="prop-value copy-action-trigger" data-copy-text="${escapeHtml(d.xpath)}" style="cursor:pointer;">${escapeHtml(d.xpath)} 📋</span></div>
             </div>
           </div>
         `;
@@ -880,7 +922,7 @@ export class InspectorPanel {
           <div class="qursor-card">
             <div class="prop-row">
               <span class="prop-label">Target Framework</span>
-              <select style="background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:3px 6px; font-size:10px;" onchange="this.getRootNode().host._panel.promptFrameworkTarget = this.value; this.getRootNode().host._panel.renderTabContent();">
+              <select class="prompt-target-select" style="background:var(--q-bg-primary); color:var(--q-text-primary); border:1px solid var(--q-border); border-radius:6px; padding:3px 6px; font-size:10px;">
                 <option value="React" ${this.promptFrameworkTarget === 'React' ? 'selected' : ''}>React</option>
                 <option value="Next.js" ${this.promptFrameworkTarget === 'Next.js' ? 'selected' : ''}>Next.js</option>
                 <option value="Vue 3" ${this.promptFrameworkTarget === 'Vue 3' ? 'selected' : ''}>Vue 3</option>
@@ -907,7 +949,7 @@ export class InspectorPanel {
           <div class="qursor-card">
             <div class="prop-row">
               <span class="prop-label">Theme Mode</span>
-              <button class="q-btn" onclick="this.getRootNode().host._panel.themeManager.toggleTheme();">Toggle Light/Dark Theme</button>
+              <button class="q-btn" id="settingsThemeToggleBtn">Toggle Light/Dark Theme</button>
             </div>
             <div class="prop-row">
               <span class="prop-label">Shortcut Toggle</span>
