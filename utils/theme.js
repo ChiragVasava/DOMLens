@@ -15,9 +15,14 @@ export const THEME_STORAGE_KEY = 'qursor_theme_preference';
 
 /**
  * Theme Design Tokens Definitions
+ * 
+ * NOTE: We intentionally do NOT use a bare :host {} rule, because it would always
+ * apply the fallback values and create a CSS cascade conflict with :host([data-theme="dark"]).
+ * Instead we use explicit [data-theme="light"] and [data-theme="dark"] selectors.
+ * The initial data-theme="dark" attribute is set on the panel container and shadow host in JS.
  */
 export const DESIGN_TOKENS = `
-  :host, :host([data-theme="light"]), [data-theme="light"] {
+  :host([data-theme="light"]), [data-theme="light"] {
     --q-bg-primary: #f5f5f7;
     --q-bg-surface: #ffffff;
     --q-bg-surface-elevated: #e8e8ed;
@@ -60,7 +65,7 @@ export const DESIGN_TOKENS = `
     --q-shadow-panel: 0 16px 40px -8px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
-  :host([data-theme="dark"]), [data-theme="dark"], .qursor-floating-panel[data-theme="dark"] {
+  :host([data-theme="dark"]), [data-theme="dark"] {
     --q-bg-primary: #161618;
     --q-bg-surface: #242426;
     --q-bg-surface-elevated: #2c2c2e;
@@ -106,7 +111,7 @@ export const DESIGN_TOKENS = `
 
 export class ThemeManager {
   constructor(targetElement = null) {
-    this.targetElement = targetElement;
+    this.targetElement = targetElement; // ShadowRoot passed from InspectorPanel
     this.currentTheme = THEMES.DARK;
     this.listeners = [];
   }
@@ -125,29 +130,42 @@ export class ThemeManager {
   }
 
   /**
-   * Sets current theme mode across target container, host element, and chrome storage
+   * Sets current theme mode and applies data-theme attribute to shadow host + panel container.
    * @param {string} theme 'dark' | 'light' | 'system'
-   * @param {boolean} persist 
+   * @param {boolean} persist - Save to chrome.storage.sync
    */
   setTheme(theme, persist = true) {
     this.currentTheme = theme;
     const effectiveTheme = this.getEffectiveTheme(theme);
 
-    // Apply data-theme to shadow host
+    // 1. Apply to the #website-inspector-root custom element (shadow host in main DOM)
     const rootHost = document.getElementById('website-inspector-root');
     if (rootHost) {
       rootHost.setAttribute('data-theme', effectiveTheme);
     }
 
+    // 2. Apply to shadow host and panel container inside shadow root
     if (this.targetElement) {
-      if (this.targetElement.host) {
-        this.targetElement.host.setAttribute('data-theme', effectiveTheme);
-      }
-      if (this.targetElement.querySelector) {
-        const panel = this.targetElement.querySelector('.qursor-floating-panel');
-        if (panel) panel.setAttribute('data-theme', effectiveTheme);
-      }
-      if (this.targetElement.setAttribute) {
+      const isShadowRoot = this.targetElement.nodeType === 11; // Node.DOCUMENT_FRAGMENT_NODE
+
+      if (isShadowRoot) {
+        // Apply to the shadow HOST element (this triggers :host([data-theme]) CSS rules)
+        if (this.targetElement.host) {
+          this.targetElement.host.setAttribute('data-theme', effectiveTheme);
+        }
+        // Apply to the .qursor-floating-panel inside (triggers [data-theme] CSS rules on it)
+        const panelEl = this.targetElement.querySelector('.qursor-floating-panel');
+        if (panelEl) {
+          panelEl.setAttribute('data-theme', effectiveTheme);
+        }
+        // Also apply to navbar and trigger bar for their own background colors
+        const navBar = this.targetElement.querySelector('.qursor-icon-navbar');
+        if (navBar) {
+          // Force repaint by toggling a class — helps Chrome's CSS variable resolution
+          navBar.classList.toggle('_theme_repaint_', effectiveTheme === THEMES.DARK);
+          navBar.classList.toggle('_theme_repaint_', false);
+        }
+      } else if (this.targetElement.setAttribute) {
         this.targetElement.setAttribute('data-theme', effectiveTheme);
       }
     }
@@ -169,31 +187,8 @@ export class ThemeManager {
   }
 
   toggleTheme() {
-    const nextTheme = this.getEffectiveTheme(this.currentTheme) === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
-    this.setTheme(nextTheme, true);
-    return nextTheme;
-  }
-
-  onChange(callback) {
-    this.listeners.push(callback);
-  }
-
-  notifyListeners(theme) {
-    this.listeners.forEach(cb => cb(theme));
-  }
-}
-
-  getEffectiveTheme(theme) {
-    if (theme === THEMES.SYSTEM) {
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? THEMES.DARK
-        : THEMES.LIGHT;
-    }
-    return theme === THEMES.DARK ? THEMES.DARK : THEMES.LIGHT;
-  }
-
-  toggleTheme() {
-    const nextTheme = this.getEffectiveTheme(this.currentTheme) === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
+    const current = this.getEffectiveTheme(this.currentTheme);
+    const nextTheme = current === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
     this.setTheme(nextTheme, true);
     return nextTheme;
   }
