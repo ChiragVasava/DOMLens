@@ -68,9 +68,14 @@ export class InspectorPanel {
 
       .qursor-floating-panel {
         position: fixed;
-        bottom: 30px;
-        right: 30px;
+        /* Use top+bottom to give the browser a concrete height to compute.
+           This is the KEY difference from max-height: the browser knows the exact
+           pixel height, so flex children can be sized reliably. */
+        bottom: 20px;
+        right: 24px;
+        top: 20px;
         width: 440px;
+        max-width: calc(100vw - 48px);
         background: var(--q-bg-primary, #161618);
         color: var(--q-text-primary, #f5f5f7);
         border: 1px solid var(--q-border, #3a3a3c);
@@ -81,28 +86,27 @@ export class InspectorPanel {
         display: none;
         flex-direction: column;
         z-index: 2147483647;
-        /* overflow:hidden removed — it was preventing the body scrollbar from working.
-           border-radius still works visually; border clips content naturally at corners. */
-        overflow: visible;
+        overflow: hidden;  /* Needed for border-radius + clips content */
         pointer-events: auto !important;
         resize: both;
         min-width: 360px;
-        max-width: 600px;
+        min-height: 300px;
         backdrop-filter: blur(20px);
         transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
       }
 
-      /* Navigation Header */
+      /* Navigation Header — fixed height, never scrolls */
       .qursor-icon-navbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 8px 12px;
-        background: var(--q-bg-surface, #ffffff);
+        background: var(--q-bg-surface, #242426);
         border-bottom: 1px solid var(--q-border-subtle);
         cursor: move;
         user-select: none;
-        flex-shrink: 0;
+        flex-shrink: 0;   /* never shrinks */
+        min-height: 42px;
       }
 
       .navbar-icons-group {
@@ -111,13 +115,14 @@ export class InspectorPanel {
         gap: 2px;
         overflow-x: auto;
         flex: 1;
+        min-width: 0;
       }
       .navbar-icons-group::-webkit-scrollbar { height: 0; }
 
       .nav-icon-btn {
         background: none;
         border: none;
-        color: var(--q-text-muted, #86868b);
+        color: var(--q-text-muted, #8e8e93);
         padding: 4px 7px;
         border-radius: 6px;
         display: flex;
@@ -137,8 +142,8 @@ export class InspectorPanel {
       }
 
       .nav-icon-btn.active {
-        background: var(--q-bg-surface-elevated, #e8e8ed);
-        color: var(--q-text-primary, #1d1d1f);
+        background: var(--q-bg-surface-elevated, #2c2c2e);
+        color: var(--q-text-primary, #f5f5f7);
         font-weight: 700;
       }
 
@@ -165,23 +170,23 @@ export class InspectorPanel {
       }
       .nav-action-btn:hover { color: var(--q-text-primary); background: var(--q-bg-hover); }
 
-      /* Sub-Header Trigger / Search Bar */
+      /* Sub-Header Trigger / Search Bar — fixed height, never scrolls */
       .qursor-trigger-bar {
-        padding: 8px 12px;
+        padding: 6px 12px;
         background: var(--q-bg-primary);
         border-bottom: 1px solid var(--q-border-subtle);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        flex-shrink: 0;
-        min-height: 38px;
+        flex-shrink: 0;   /* never shrinks */
+        min-height: 44px;
       }
 
       .trigger-input-pill {
-        background: var(--q-bg-surface, #ffffff);
-        border: 1px solid var(--q-border, #e5e5ea);
+        background: var(--q-bg-surface, #242426);
+        border: 1px solid var(--q-border, #3a3a3c);
         border-radius: 8px;
-        padding: 5px 10px;
+        padding: 6px 10px;
         display: flex;
         align-items: center;
         gap: 6px;
@@ -194,7 +199,7 @@ export class InspectorPanel {
       /* Segment Pill Controls */
       .segment-pill-container {
         display: flex;
-        background: var(--q-bg-surface-elevated, #e8e8ed);
+        background: var(--q-bg-surface-elevated, #2c2c2e);
         border-radius: 8px;
         padding: 2px;
         gap: 2px;
@@ -202,6 +207,7 @@ export class InspectorPanel {
         overflow-x: auto;
         flex-shrink: 0;
       }
+      .segment-pill-container::-webkit-scrollbar { height: 0; }
 
       .segment-btn {
         flex: 1;
@@ -219,9 +225,9 @@ export class InspectorPanel {
       }
 
       .segment-btn.active {
-        background: var(--q-bg-surface, #ffffff);
-        color: var(--q-text-primary, #1d1d1f);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        background: var(--q-bg-surface, #242426);
+        color: var(--q-text-primary, #f5f5f7);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
       }
 
       /* Zoom Controls Bar */
@@ -244,31 +250,49 @@ export class InspectorPanel {
       }
       .zoom-btn:hover { background: var(--q-bg-surface-elevated); }
 
-      /* Panel Body — uses direct calc() max-height so scroll ALWAYS works regardless of flex context.
-         Formula: 100vh - 30px (bottom) - navbar (~46px) - trigger-bar (~46px) - some breathing room.
-         This is more reliable than flex:1 + min-height:0 which needs parent to have bounded height. */
+      /* ================================================================
+         PANEL BODY — THE SCROLLABLE AREA
+         ================================================================
+         Pattern used:
+           Panel     = flex column with defined height (top+bottom anchored)
+           Navbar    = flex-shrink:0 (fixed, no scroll)
+           TrigBar   = flex-shrink:0 (fixed, no scroll)
+           Body      = flex:1 + min-height:0 + overflow-y:auto  ← THE SCROLL AREA
+
+         Why min-height:0 is mandatory:
+           Flex items default to min-height:auto which means "at least as tall
+           as my content." This prevents shrinking below content height, making
+           overflow:auto never fire (no scrollbar ever appears).
+           Setting min-height:0 removes this constraint so the flex item CAN
+           shrink to fill only the leftover space, and overflow:auto works.
+
+         Why top+bottom on panel matters:
+           max-height alone doesn't give the browser a definitive height to
+           compute flex children from. top:20px + bottom:20px = height of
+           (100vh - 40px) which is a REAL pixel value the browser uses.
+         ================================================================ */
       .qursor-panel-body {
+        flex: 1 1 0;         /* grow, shrink, start from 0 (not content size) */
+        min-height: 0;       /* allow shrinking below content height — required for scroll */
+        overflow-y: auto;    /* show scrollbar when content overflows */
+        overflow-x: hidden;
         padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 10px;
-        overflow-y: auto;
-        overflow-x: hidden;
-        max-height: calc(100vh - 170px);
-        /* Clip body corners to match panel border-radius since panel itself has overflow:visible */
-        border-bottom-left-radius: 18px;
-        border-bottom-right-radius: 18px;
       }
-      /* Custom slim scrollbar inside shadow DOM */
+
+      /* Slim, themed scrollbar for the panel body */
       .qursor-panel-body::-webkit-scrollbar {
-        width: 5px;
+        width: 4px;
       }
       .qursor-panel-body::-webkit-scrollbar-track {
         background: transparent;
+        margin: 10px 0;
       }
       .qursor-panel-body::-webkit-scrollbar-thumb {
         background: var(--q-border, #3a3a3c);
-        border-radius: 3px;
+        border-radius: 4px;
       }
       .qursor-panel-body::-webkit-scrollbar-thumb:hover {
         background: var(--q-text-muted, #8e8e93);
