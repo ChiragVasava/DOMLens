@@ -104,10 +104,13 @@ export class InspectorPanel {
         padding: 8px 12px;
         background: var(--q-bg-surface, #242426);
         border-bottom: 1px solid var(--q-border-subtle);
-        cursor: move;
+        cursor: grab;      /* signal the header is draggable */
         user-select: none;
-        flex-shrink: 0;   /* never shrinks */
+        flex-shrink: 0;
         min-height: 42px;
+      }
+      .qursor-icon-navbar:active {
+        cursor: grabbing;  /* while actively dragging */
       }
 
       .navbar-icons-group {
@@ -254,33 +257,21 @@ export class InspectorPanel {
       /* ================================================================
          PANEL BODY — THE SCROLLABLE AREA
          ================================================================
-         Pattern used:
-           Panel     = flex column with defined height (top+bottom anchored)
-           Navbar    = flex-shrink:0 (fixed, no scroll)
-           TrigBar   = flex-shrink:0 (fixed, no scroll)
-           Body      = flex:1 + min-height:0 + overflow-y:auto  ← THE SCROLL AREA
-
-         Why min-height:0 is mandatory:
-           Flex items default to min-height:auto which means "at least as tall
-           as my content." This prevents shrinking below content height, making
-           overflow:auto never fire (no scrollbar ever appears).
-           Setting min-height:0 removes this constraint so the flex item CAN
-           shrink to fill only the leftover space, and overflow:auto works.
-
-         Why top+bottom on panel matters:
-           max-height alone doesn't give the browser a definitive height to
-           compute flex children from. top:20px + bottom:20px = height of
-           (100vh - 40px) which is a REAL pixel value the browser uses.
+         Pattern: Panel has explicit JS-set height, flex:1+min-height:0
+         on body ensures scroll works. Background inherits from theme.
          ================================================================ */
       .qursor-panel-body {
-        flex: 1 1 0;         /* grow, shrink, start from 0 (not content size) */
-        min-height: 0;       /* allow shrinking below content height — required for scroll */
-        overflow-y: auto;    /* show scrollbar when content overflows */
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
         overflow-x: hidden;
         padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 10px;
+        /* Body background matches the panel theme —
+           dark mode = near-black (#161618), light mode = near-white (#f5f5f7) */
+        background: var(--q-bg-primary, #161618);
       }
 
       /* Slim, themed scrollbar for the panel body */
@@ -574,50 +565,47 @@ export class InspectorPanel {
     });
 
     // ─── Dragging Logic ───
+    // Drag is ONLY active while the mouse button is held (mousedown→mouseup).
     header.addEventListener('mousedown', (e) => {
       // Don't drag if clicking nav buttons or action buttons
       if (e.target.closest('.nav-icon-btn') || e.target.closest('.nav-action-btn')) return;
-      e.preventDefault(); // Prevent text selection sticking cursor
+      e.preventDefault(); // Prevent browser text-selection from capturing cursor
       this.isDragging = true;
-      this.panelContainer.style.userSelect = 'none'; // Lock selection during drag
+      this.panelContainer.style.userSelect = 'none';
       this.panelContainer.style.cursor = 'grabbing';
+      header.style.cursor = 'grabbing';
       const rect = this.panelContainer.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
       this.dragOffsetY = e.clientY - rect.top;
-      // Switch from bottom/right anchoring to top/left for free movement
+      // Freeze current position as top/left and release bottom/right anchors
       this.panelContainer.style.top = `${rect.top}px`;
       this.panelContainer.style.left = `${rect.left}px`;
       this.panelContainer.style.bottom = 'auto';
       this.panelContainer.style.right = 'auto';
     });
 
-    // Use window (not document) to catch mouse events even when leaving the panel
+    // mousemove on window so drag works even when mouse is outside the panel
     window.addEventListener('mousemove', (e) => {
-      if (!this.isDragging) return;
+      if (!this.isDragging) return;  // ← only fires during mousedown state
       e.preventDefault();
       const panelW = this.panelContainer.offsetWidth;
       const panelH = this.panelContainer.offsetHeight;
       const left = Math.max(0, Math.min(window.innerWidth - panelW, e.clientX - this.dragOffsetX));
-      const top = Math.max(0, Math.min(window.innerHeight - panelH, e.clientY - this.dragOffsetY));
+      const top  = Math.max(0, Math.min(window.innerHeight - panelH, e.clientY - this.dragOffsetY));
       this.panelContainer.style.left = `${left}px`;
-      this.panelContainer.style.top = `${top}px`;
+      this.panelContainer.style.top  = `${top}px`;
     });
 
-    window.addEventListener('mouseup', () => {
+    // mouseup restores normal state — drag stops immediately on mouse release
+    const stopDrag = () => {
       if (!this.isDragging) return;
       this.isDragging = false;
       this.panelContainer.style.userSelect = '';
       this.panelContainer.style.cursor = '';
-    });
-
-    // Release drag if mouse leaves the browser window
-    window.addEventListener('mouseleave', () => {
-      if (this.isDragging) {
-        this.isDragging = false;
-        this.panelContainer.style.userSelect = '';
-        this.panelContainer.style.cursor = '';
-      }
-    });
+      header.style.cursor = 'grab';  // restore header cursor
+    };
+    window.addEventListener('mouseup', stopDrag);
+    window.addEventListener('mouseleave', stopDrag);  // also stop if mouse exits browser
 
     // ─── Theme Toggle Button (header) ───
     themeToggleBtn.addEventListener('click', (e) => {
@@ -1221,14 +1209,12 @@ export class InspectorPanel {
       // 7. CODE TAB
       // ══════════════════════════════════════════════
       case 'code': {
-        // Format selector bar in trigger bar
+        // Format selector bar in trigger bar — HTML | HTML+CSS | React
         triggerBar.innerHTML = `
           <div class="segment-pill-container">
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_ONLY}">HTML</button>
             <button class="segment-btn ${this.codeFormat === 'html+css-inline' ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="html+css-inline">HTML+CSS</button>
-            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_CSS_JS ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_CSS_JS}">HTML+CSS+JS</button>
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.REACT ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.REACT}">React</button>
-            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.VUE ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.VUE}">Vue</button>
           </div>
         `;
 
