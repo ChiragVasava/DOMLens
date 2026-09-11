@@ -68,12 +68,12 @@ export class InspectorPanel {
 
       .qursor-floating-panel {
         position: fixed;
-        /* Use top+bottom to give the browser a concrete height to compute.
-           This is the KEY difference from max-height: the browser knows the exact
-           pixel height, so flex children can be sized reliably. */
+        /* Use right+bottom for initial position only.
+           JS sets an explicit height on show() so flex:1 + min-height:0
+           on the body works correctly. Dragging clears bottom/right
+           and sets top/left instead. */
         bottom: 20px;
         right: 24px;
-        top: 20px;
         width: 440px;
         max-width: calc(100vw - 48px);
         background: var(--q-bg-primary, #161618);
@@ -86,11 +86,12 @@ export class InspectorPanel {
         display: none;
         flex-direction: column;
         z-index: 2147483647;
-        overflow: hidden;  /* Needed for border-radius + clips content */
+        overflow: hidden;
         pointer-events: auto !important;
         resize: both;
         min-width: 360px;
         min-height: 300px;
+        max-height: calc(100vh - 40px);
         backdrop-filter: blur(20px);
         transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
       }
@@ -574,26 +575,48 @@ export class InspectorPanel {
 
     // ─── Dragging Logic ───
     header.addEventListener('mousedown', (e) => {
+      // Don't drag if clicking nav buttons or action buttons
       if (e.target.closest('.nav-icon-btn') || e.target.closest('.nav-action-btn')) return;
+      e.preventDefault(); // Prevent text selection sticking cursor
       this.isDragging = true;
+      this.panelContainer.style.userSelect = 'none'; // Lock selection during drag
+      this.panelContainer.style.cursor = 'grabbing';
       const rect = this.panelContainer.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
       this.dragOffsetY = e.clientY - rect.top;
+      // Switch from bottom/right anchoring to top/left for free movement
+      this.panelContainer.style.top = `${rect.top}px`;
+      this.panelContainer.style.left = `${rect.left}px`;
       this.panelContainer.style.bottom = 'auto';
       this.panelContainer.style.right = 'auto';
     });
 
-    // Attach drag events on document (not window, to ensure they fire within shadowRoot context)
-    document.addEventListener('mousemove', (e) => {
+    // Use window (not document) to catch mouse events even when leaving the panel
+    window.addEventListener('mousemove', (e) => {
       if (!this.isDragging) return;
-      const left = Math.max(0, Math.min(window.innerWidth - 300, e.clientX - this.dragOffsetX));
-      const top = Math.max(0, Math.min(window.innerHeight - 50, e.clientY - this.dragOffsetY));
+      e.preventDefault();
+      const panelW = this.panelContainer.offsetWidth;
+      const panelH = this.panelContainer.offsetHeight;
+      const left = Math.max(0, Math.min(window.innerWidth - panelW, e.clientX - this.dragOffsetX));
+      const top = Math.max(0, Math.min(window.innerHeight - panelH, e.clientY - this.dragOffsetY));
       this.panelContainer.style.left = `${left}px`;
       this.panelContainer.style.top = `${top}px`;
     });
 
-    document.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', () => {
+      if (!this.isDragging) return;
       this.isDragging = false;
+      this.panelContainer.style.userSelect = '';
+      this.panelContainer.style.cursor = '';
+    });
+
+    // Release drag if mouse leaves the browser window
+    window.addEventListener('mouseleave', () => {
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.panelContainer.style.userSelect = '';
+        this.panelContainer.style.cursor = '';
+      }
     });
 
     // ─── Theme Toggle Button (header) ───
@@ -833,7 +856,14 @@ export class InspectorPanel {
   }
 
   show() {
-    if (this.panelContainer) this.panelContainer.style.display = 'flex';
+    if (!this.panelContainer) return;
+    this.panelContainer.style.display = 'flex';
+    // Set explicit pixel height so flex:1 + min-height:0 on the body works
+    // for scrolling. Only set it on first show (or after hide resets it).
+    if (!this.panelContainer.style.height || this.panelContainer.style.height === '') {
+      const h = Math.min(window.innerHeight - 40, 660);
+      this.panelContainer.style.height = `${h}px`;
+    }
   }
 
   hide() {
@@ -1195,19 +1225,58 @@ export class InspectorPanel {
         triggerBar.innerHTML = `
           <div class="segment-pill-container">
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_ONLY}">HTML</button>
-            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.CSS_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.CSS_ONLY}">CSS</button>
-            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.JS_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.JS_ONLY}">JS</button>
+            <button class="segment-btn ${this.codeFormat === 'html+css-inline' ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="html+css-inline">HTML+CSS</button>
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_CSS_JS ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_CSS_JS}">HTML+CSS+JS</button>
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.REACT ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.REACT}">React</button>
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.VUE ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.VUE}">Vue</button>
           </div>
         `;
 
+        // Generate HTML with every element's computed styles as inline style="..."
+        const generateInlineCssHtml = (el) => {
+          if (!el || el.nodeType !== 1) return el ? el.outerHTML || '' : '';
+          try {
+            const clone = el.cloneNode(true);
+            const allEls = [el, ...el.querySelectorAll('*')];
+            const cloneEls = [clone, ...clone.querySelectorAll('*')];
+            allEls.forEach((orig, i) => {
+              const cs = window.getComputedStyle(orig);
+              // Only extract non-default/non-inherited properties that matter visually
+              const PROPS = [
+                'color','background-color','font-size','font-weight','font-family',
+                'line-height','letter-spacing','text-align','text-decoration','text-transform',
+                'padding','padding-top','padding-right','padding-bottom','padding-left',
+                'margin','margin-top','margin-right','margin-bottom','margin-left',
+                'border','border-radius','box-shadow','opacity','display','flex-direction',
+                'align-items','justify-content','gap','width','height','max-width',
+                'position','top','left','right','bottom','z-index','overflow',
+                'cursor','pointer-events','visibility'
+              ];
+              const styleStr = PROPS.map(p => {
+                const v = cs.getPropertyValue(p);
+                return v && v !== '' && v !== 'none' && v !== 'normal' && v !== 'auto' && v !== 'static' && v !== '0px' && v !== 'rgba(0, 0, 0, 0)' ? `${p}:${v}` : null;
+              }).filter(Boolean).join(';');
+              if (cloneEls[i]) cloneEls[i].setAttribute('style', styleStr);
+            });
+            return clone.outerHTML;
+          } catch(e) {
+            return el.outerHTML;
+          }
+        };
+
         let codeText = '';
         if (this.codeScope === 'Full Page') {
-          codeText = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${document.title}</title>\n${d.pageStyles || ''}\n</head>\n<body>\n${document.body.outerHTML}\n</body>\n</html>`;
+          if (this.codeFormat === 'html+css-inline') {
+            codeText = generateInlineCssHtml(document.documentElement) || '';
+          } else {
+            codeText = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${document.title}</title>\n${d.pageStyles || ''}\n</head>\n<body>\n${document.body.outerHTML}\n</body>\n</html>`;
+          }
         } else {
-          codeText = generateComponentCode(d, this.codeFormat);
+          if (this.codeFormat === 'html+css-inline') {
+            codeText = generateInlineCssHtml(this.targetElement);
+          } else {
+            codeText = generateComponentCode(d, this.codeFormat);
+          }
         }
 
         body.innerHTML = `
