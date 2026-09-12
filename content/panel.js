@@ -19,9 +19,10 @@ import { copyToClipboard } from '../utils/clipboard.js';
 import { DESIGN_TOKENS, ThemeManager, THEMES } from '../utils/theme.js';
 import { ToastManager } from '../utils/toast.js';
 import { generateComponentCode, CODE_FORMATS } from '../utils/component_generator.js';
-import { generateStructuredAiPrompt } from '../utils/prompt_generator.js';
 import { extractElementAssets, filterAssets } from '../utils/asset_extractor.js';
 import { StyleEditor } from '../utils/style_editor.js';
+import { extractElementData } from './extractor.js';
+import { callLlmEditComponent, getLlmConfig, saveLlmConfig, LLM_PROVIDERS } from '../utils/llm_service.js';
 
 export class InspectorPanel {
   constructor(shadowRoot) {
@@ -33,20 +34,31 @@ export class InspectorPanel {
     this.userZoomScale = null;
 
     // Code tab state
-    this.codeFormat = CODE_FORMATS.HTML_CSS_JS;
+    this.codeFormat = 'html+css-inline';
     this.codeScope = 'Selected';
     this.codeStyles = 'Computed';
 
     // Assets tab state
     this.assetFilter = 'All';
 
-    // Edit tab state
+    // Edit tab state & AI Prompt
     this.styleEditor = new StyleEditor();
     this.editInstructionText = '';
+    this.aiEditPromptText = '';
+    this._originalOuterHTML = null;
+    this.isAiGenerating = false;
 
-    // Prompt tab state
-    this.promptFrameworkTarget = 'React';
-    this.editedPromptText = null;
+    // LLM API Configuration
+    this.apiKey = '';
+    this.hasApiKey = false;
+    this.llmProvider = LLM_PROVIDERS.GEMINI;
+
+    // Asynchronously load saved API key
+    getLlmConfig().then(cfg => {
+      this.apiKey = cfg.apiKey;
+      this.hasApiKey = !!cfg.apiKey;
+      this.llmProvider = cfg.provider;
+    });
 
     this.isDragging = false;
     this.dragOffsetX = 0;
@@ -687,24 +699,65 @@ export class InspectorPanel {
         return;
       }
 
-      // Apply Edits button
+      // AI Apply Edit button in Edit tab
+      if (e.target.closest('#applyAiEditBtn')) {
+        e.stopPropagation();
+        this._handleAiEdit();
+        return;
+      }
+
+      // Direct manual edits Apply button
       if (e.target.closest('#applyEditBtn')) {
         e.stopPropagation();
         this._applyEdits();
         return;
       }
 
-      // Reset Edits button
+      // Reset / Revert Edits button
       if (e.target.closest('#resetEditBtn')) {
         e.stopPropagation();
-        this.styleEditor.reset();
-        this.editInstructionText = '';
-        // Revert element styles
+        if (this._originalOuterHTML && this.targetElement && this.targetElement.parentNode) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = this._originalOuterHTML;
+          const origEl = tempDiv.firstElementChild;
+          if (origEl) {
+            this.targetElement.parentNode.replaceChild(origEl, this.targetElement);
+            this.targetElement = origEl;
+            this.currentData = extractElementData(origEl);
+            this._originalOuterHTML = null;
+          }
+        }
         if (this.targetElement) {
           this.targetElement.removeAttribute('style');
         }
-        this.toastManager.show('✓ Style edits reset', 'info');
+        this.styleEditor.reset();
+        this.editInstructionText = '';
+        this.aiEditPromptText = '';
+        this.toastManager.show('✓ Component reverted to original', 'info');
         this.renderTabContent();
+        return;
+      }
+
+      // Quick shortcut to Settings tab for API Key
+      if (e.target.closest('#editApiKeyQuickBtn')) {
+        e.stopPropagation();
+        this.activeTab = 'settings';
+        this._updateNavHighlight();
+        this.renderTabContent();
+        return;
+      }
+
+      // Save API Key button in Settings
+      if (e.target.closest('#saveApiKeyBtn')) {
+        e.stopPropagation();
+        this._handleSaveApiKey();
+        return;
+      }
+
+      // Toggle API Key visibility in Settings
+      if (e.target.closest('#toggleApiKeyVisibilityBtn')) {
+        e.stopPropagation();
+        this._toggleApiKeyVisibility();
         return;
       }
 
@@ -731,12 +784,10 @@ export class InspectorPanel {
       // Download Action
       if (downloadBtn && this.currentData) {
         e.stopPropagation();
-        const content = generateComponentCode(this.currentData, this.codeFormat);
-        const ext = this.codeFormat === CODE_FORMATS.REACT ? 'jsx'
-          : this.codeFormat === CODE_FORMATS.VUE ? 'vue'
-          : this.codeFormat === CODE_FORMATS.CSS_ONLY ? 'css'
-          : this.codeFormat === CODE_FORMATS.JS_ONLY ? 'js'
-          : 'html';
+        const content = this.codeFormat === 'html+css-inline'
+          ? (this.codeScope === 'Full Page' ? this.generateInlineCssHtml(document.body) : (this.generateInlineCssHtml(this.targetElement) || this.currentData.general?.fullOuterHTML || ''))
+          : generateComponentCode(this.currentData, this.codeFormat);
+        const ext = this.codeFormat === CODE_FORMATS.REACT ? 'jsx' : 'html';
         this.downloadFile(content, `qursor_${(this.currentData.tag || 'element').toLowerCase()}.${ext}`);
         this.toastManager.show(`✓ Downloaded file`, 'success');
         return;
@@ -759,13 +810,11 @@ export class InspectorPanel {
       }
     });
 
-    // ─── Select change handler (prompt framework) ───
+    // ─── Select change handler for Settings LLM provider ───
     this.panelContainer.addEventListener('change', (e) => {
-      if (e.target.classList.contains('prompt-target-select')) {
+      if (e.target && e.target.id === 'settingsLlmProvider') {
         e.stopPropagation();
-        this.promptFrameworkTarget = e.target.value;
-        this.editedPromptText = null;
-        this.renderTabContent();
+        this.llmProvider = e.target.value;
       }
     });
   }
@@ -857,9 +906,210 @@ export class InspectorPanel {
     this.styleEditor.reset();
     this.editedPromptText = null;
     this.editInstructionText = '';
+    this._originalOuterHTML = null;
     if (!data) return;
     this.show();
     this.renderTabContent();
+  }
+
+  /**
+   * Generates a self-contained HTML string of an element and its subtree
+   * with all computed visual CSS properties inlined directly on each node.
+   * Resolves relative URLs (images, links) and strips non-rendering tags like <script>.
+   */
+  generateInlineCssHtml(el) {
+    if (!el || el.nodeType !== 1) return el ? (el.outerHTML || '') : '';
+    try {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll('script, noscript').forEach(s => s.remove());
+
+      const allEls = [el, ...el.querySelectorAll('*')];
+      const cloneEls = [clone, ...clone.querySelectorAll('*')];
+
+      const PROPS = [
+        'box-sizing',
+        'color', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
+        'font-size', 'font-weight', 'font-family', 'font-style',
+        'line-height', 'letter-spacing', 'text-align', 'text-decoration', 'text-transform', 'text-overflow', 'white-space', 'word-break',
+        'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+        'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+        'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+        'border-radius', 'border-color', 'border-width', 'border-style',
+        'box-shadow', 'opacity', 'visibility',
+        'display', 'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
+        'align-items', 'justify-content', 'align-content', 'align-self', 'gap', 'row-gap', 'column-gap',
+        'grid-template-columns', 'grid-template-rows',
+        'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+        'position', 'top', 'left', 'right', 'bottom', 'z-index',
+        'overflow', 'overflow-x', 'overflow-y',
+        'cursor', 'pointer-events',
+        'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+        'transform', 'transform-origin', 'backdrop-filter', 'object-fit', 'aspect-ratio', 'list-style'
+      ];
+
+      allEls.forEach((orig, i) => {
+        const target = cloneEls[i];
+        if (!target) return;
+
+        // Resolve absolute URLs for images, links, etc.
+        if (orig.tagName === 'IMG' && orig.src) {
+          target.setAttribute('src', orig.src);
+        } else if (orig.tagName === 'A' && orig.href) {
+          target.setAttribute('href', orig.href);
+          target.setAttribute('target', '_blank');
+        } else if (orig.tagName === 'SOURCE' && orig.srcset) {
+          target.setAttribute('srcset', orig.srcset);
+        }
+
+        const cs = window.getComputedStyle(orig);
+        const styleParts = [];
+
+        PROPS.forEach(p => {
+          let v = cs.getPropertyValue(p);
+          if (!v || v === '' || v === 'none' || v === 'normal' || v === 'auto' || v === '0px' || v === 'rgba(0, 0, 0, 0)') {
+            return;
+          }
+          if (p === 'position' && v === 'static') return;
+          // For root element (i === 0), avoid fixed positioning in preview/export
+          if (i === 0 && p === 'position' && (v === 'fixed' || v === 'absolute')) {
+            v = 'relative';
+          }
+          styleParts.push(`${p}:${v}`);
+        });
+
+        if (styleParts.length > 0) {
+          target.setAttribute('style', styleParts.join('; '));
+        }
+      });
+
+      return clone.outerHTML;
+    } catch (e) {
+      console.warn('[Qursor++] Failed to generate inline CSS HTML:', e);
+      return el.outerHTML || '';
+    }
+  }
+
+  /**
+   * Invokes the LLM to edit the currently selected component
+   */
+  async _handleAiEdit() {
+    const promptArea = this.panelContainer.querySelector('#aiEditPromptArea');
+    const prompt = promptArea ? promptArea.value.trim() : '';
+
+    if (!prompt) {
+      this.toastManager.show('⚠️ Please type an instruction for the AI', 'warning');
+      if (promptArea) promptArea.focus();
+      return;
+    }
+
+    const config = await getLlmConfig();
+    if (!config.apiKey) {
+      this.toastManager.show('⚠️ Please configure your API Key in Settings first', 'warning');
+      this.activeTab = 'settings';
+      this._updateNavHighlight();
+      this.renderTabContent();
+      return;
+    }
+
+    const applyBtn = this.panelContainer.querySelector('#applyAiEditBtn');
+    const originalBtnText = applyBtn ? applyBtn.innerHTML : '⚡ Apply with AI';
+
+    try {
+      if (applyBtn) {
+        applyBtn.disabled = true;
+        applyBtn.innerHTML = '<span>⏳ Generating with AI...</span>';
+      }
+      this.isAiGenerating = true;
+
+      // Extract current HTML with computed visual styles
+      const currentHtml = this.generateInlineCssHtml(this.targetElement) || (this.currentData?.general?.fullOuterHTML) || '';
+      const tag = (this.currentData?.tag || 'div').toLowerCase();
+
+      // Save original for revert
+      if (!this._originalOuterHTML && this.targetElement) {
+        this._originalOuterHTML = this.targetElement.outerHTML;
+      }
+
+      // Call the LLM
+      const updatedHtml = await callLlmEditComponent({
+        prompt,
+        currentHtml,
+        componentTag: tag
+      });
+
+      if (!updatedHtml) {
+        throw new Error('Received empty HTML from AI model');
+      }
+
+      // Replace element on the live webpage
+      if (this.targetElement && this.targetElement.parentNode) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = updatedHtml;
+        const newEl = tempDiv.firstElementChild;
+        if (newEl) {
+          this.targetElement.parentNode.replaceChild(newEl, this.targetElement);
+          this.targetElement = newEl;
+        } else {
+          this.targetElement.innerHTML = updatedHtml;
+        }
+      }
+
+      // Extract fresh data from the updated element
+      if (this.targetElement) {
+        this.currentData = extractElementData(this.targetElement);
+      }
+
+      this.aiEditPromptText = prompt;
+      this.toastManager.show('✨ Component updated with AI! Switched to Live view', 'success');
+
+      // Switch to Live Preview tab to show the re-rendered component
+      this.activeTab = 'live';
+      this._updateNavHighlight();
+      this.renderTabContent();
+
+    } catch (err) {
+      console.error('[Qursor++] AI Edit Error:', err);
+      this.toastManager.show(`❌ AI Error: ${err.message}`, 'error');
+    } finally {
+      this.isAiGenerating = false;
+      if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.innerHTML = originalBtnText;
+      }
+    }
+  }
+
+  async _handleSaveApiKey() {
+    const input = this.panelContainer.querySelector('#settingsApiKeyInput');
+    const providerSelect = this.panelContainer.querySelector('#settingsLlmProvider');
+    const key = input ? input.value.trim() : '';
+    const provider = providerSelect ? providerSelect.value : this.llmProvider;
+
+    if (!key) {
+      this.toastManager.show('⚠️ API key cannot be empty', 'warning');
+      return;
+    }
+
+    await saveLlmConfig(key, provider);
+    this.apiKey = key;
+    this.hasApiKey = true;
+    this.llmProvider = provider;
+
+    this.toastManager.show(`✓ ${provider.toUpperCase()} API key saved securely!`, 'success');
+    this.renderTabContent();
+  }
+
+  _toggleApiKeyVisibility() {
+    const input = this.panelContainer.querySelector('#settingsApiKeyInput');
+    const btn = this.panelContainer.querySelector('#toggleApiKeyVisibilityBtn');
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (btn) btn.textContent = '🙈';
+    } else {
+      input.type = 'password';
+      if (btn) btn.textContent = '👁️';
+    }
   }
 
   show() {
@@ -937,7 +1187,15 @@ export class InspectorPanel {
           </div>
         `;
 
-        let renderableHtml = general.fullOuterHTML || '';
+        // Render the extracted HTML + CSS of our selected component code
+        let renderableHtml = '';
+        if (this.targetElement) {
+          renderableHtml = this.generateInlineCssHtml(this.targetElement);
+        }
+        if (!renderableHtml) {
+          renderableHtml = general.fullOuterHTML || '';
+        }
+
         const lowerTag = (general.tagName || '').toLowerCase();
         if (lowerTag === 'td' || lowerTag === 'th') {
           renderableHtml = `<table style="border-collapse:collapse;"><tbody><tr>${renderableHtml}</tr></tbody></table>`;
@@ -947,15 +1205,35 @@ export class InspectorPanel {
           renderableHtml = `<ul style="margin:0; padding:0 0 0 20px; list-style:disc;">${renderableHtml}</ul>`;
         }
 
-        const iframeSrc = `<!DOCTYPE html><html><head><meta charset="utf-8">${d.pageStyles || ''}
+        const bgIsDark = this.themeManager.isDark();
+        const iframeBg = bgIsDark ? '#1a1a1d' : '#ffffff';
+
+        const iframeSrc = `<!DOCTYPE html><html><head><meta charset="utf-8">
           <style>
-            html,body{margin:0;padding:12px;background:transparent;overflow:auto;display:flex;justify-content:center;}
-            .preview-wrap{width:${targetWidth}px;transform:scale(${activeZoom});transform-origin:top center;}
-          </style></head><body><div class="preview-wrap">${renderableHtml}</div></body></html>`;
+            *, *::before, *::after { box-sizing: border-box; }
+            html, body {
+              margin: 0;
+              padding: 16px;
+              background: ${iframeBg};
+              overflow: auto;
+              display: flex;
+              justify-content: center;
+              align-items: flex-start;
+              font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            .preview-wrap {
+              width: ${targetWidth}px;
+              transform: scale(${activeZoom});
+              transform-origin: top center;
+              max-width: 100%;
+            }
+          </style>
+          ${d.pageStyles || ''}
+        </head><body><div class="preview-wrap">${renderableHtml}</div></body></html>`;
 
         body.innerHTML = `
           <div class="section-label-row">
-            <span>COMPONENT LIVE FRAME</span>
+            <span>COMPONENT LIVE FRAME (HTML + CSS)</span>
             <span class="node-badge">${targetWidth}×${targetHeight}px</span>
           </div>
           <div class="qursor-card" style="padding:4px;">
@@ -1223,8 +1501,10 @@ export class InspectorPanel {
       // ══════════════════════════════════════════════
       case 'code': {
         // Format selector bar — HTML+CSS | React only
-        // Default to html+css-inline if current format was html_only (now removed)
-        if (this.codeFormat === CODE_FORMATS.HTML_ONLY) this.codeFormat = 'html+css-inline';
+        if (this.codeFormat === CODE_FORMATS.HTML_ONLY || !this.codeFormat || this.codeFormat === CODE_FORMATS.HTML_CSS_JS) {
+          this.codeFormat = 'html+css-inline';
+        }
+
         triggerBar.innerHTML = `
           <div class="segment-pill-container">
             <button class="segment-btn ${this.codeFormat === 'html+css-inline' ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="html+css-inline">HTML+CSS</button>
@@ -1232,51 +1512,62 @@ export class InspectorPanel {
           </div>
         `;
 
-        // Generate HTML with every element's computed styles as inline style="..."
-        const generateInlineCssHtml = (el) => {
-          if (!el || el.nodeType !== 1) return el ? el.outerHTML || '' : '';
-          try {
-            const clone = el.cloneNode(true);
-            const allEls = [el, ...el.querySelectorAll('*')];
-            const cloneEls = [clone, ...clone.querySelectorAll('*')];
-            allEls.forEach((orig, i) => {
-              const cs = window.getComputedStyle(orig);
-              // Only extract non-default/non-inherited properties that matter visually
-              const PROPS = [
-                'color','background-color','font-size','font-weight','font-family',
-                'line-height','letter-spacing','text-align','text-decoration','text-transform',
-                'padding','padding-top','padding-right','padding-bottom','padding-left',
-                'margin','margin-top','margin-right','margin-bottom','margin-left',
-                'border','border-radius','box-shadow','opacity','display','flex-direction',
-                'align-items','justify-content','gap','width','height','max-width',
-                'position','top','left','right','bottom','z-index','overflow',
-                'cursor','pointer-events','visibility'
-              ];
-              const styleStr = PROPS.map(p => {
-                const v = cs.getPropertyValue(p);
-                return v && v !== '' && v !== 'none' && v !== 'normal' && v !== 'auto' && v !== 'static' && v !== '0px' && v !== 'rgba(0, 0, 0, 0)' ? `${p}:${v}` : null;
-              }).filter(Boolean).join(';');
-              if (cloneEls[i]) cloneEls[i].setAttribute('style', styleStr);
-            });
-            return clone.outerHTML;
-          } catch(e) {
-            return el.outerHTML;
-          }
-        };
-
         let codeText = '';
         if (this.codeScope === 'Full Page') {
           if (this.codeFormat === 'html+css-inline') {
-            codeText = generateInlineCssHtml(document.documentElement) || '';
+            codeText = this.generateInlineCssHtml(document.body) || '';
           } else {
             codeText = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${document.title}</title>\n${d.pageStyles || ''}\n</head>\n<body>\n${document.body.outerHTML}\n</body>\n</html>`;
           }
         } else {
           if (this.codeFormat === 'html+css-inline') {
-            codeText = generateInlineCssHtml(this.targetElement);
+            codeText = this.generateInlineCssHtml(this.targetElement) || general.fullOuterHTML || '';
           } else {
             codeText = generateComponentCode(d, this.codeFormat);
           }
+        }
+
+        // Live preview of extracted HTML+CSS code
+        let previewCardHtml = '';
+        if (this.codeFormat === 'html+css-inline' && codeText) {
+          const bgIsDark = this.themeManager.isDark();
+          const iframeBg = bgIsDark ? '#1a1a1d' : '#ffffff';
+          const previewDoc = `<!DOCTYPE html><html><head><meta charset="utf-8">
+            <style>
+              *, *::before, *::after { box-sizing: border-box; }
+              html, body {
+                margin: 0;
+                padding: 16px;
+                background: ${iframeBg};
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                min-height: 100%;
+                overflow: auto;
+              }
+              .preview-inner {
+                max-width: 100%;
+                display: flex;
+                justify-content: center;
+              }
+            </style>
+          </head><body><div class="preview-inner">${codeText}</div></body></html>`;
+
+          previewCardHtml = `
+            <div class="qursor-card" style="padding:0;overflow:hidden;margin-top:8px;">
+              <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);padding:8px 12px;background:var(--q-bg-surface);border-bottom:1px solid var(--q-border);display:flex;justify-content:space-between;align-items:center;">
+                <span>🖼️ Preview: Extracted HTML + CSS</span>
+                <span class="node-badge" style="font-size:9px;">Live Component Code</span>
+              </div>
+              <iframe
+                id="codePreviewFrame"
+                sandbox="allow-scripts"
+                srcdoc="${_escapeAttr(previewDoc)}"
+                style="width:100%;height:220px;border:none;background:${iframeBg};display:block;"
+              ></iframe>
+            </div>
+          `;
         }
 
         body.innerHTML = `
@@ -1297,21 +1588,59 @@ export class InspectorPanel {
                 <button class="icon-action-btn download-action-trigger" title="Download">↓ Save</button>
               </div>
             </div>
-            <textarea class="q-textarea" style="min-height:180px;" readonly>${_esc(codeText)}</textarea>
+            <textarea class="q-textarea" style="min-height:160px;" readonly>${_esc(codeText)}</textarea>
           </div>
+          ${previewCardHtml}
         `;
         break;
       }
 
       // ══════════════════════════════════════════════
-      // 8. EDIT TAB
+      // 8. EDIT TAB (AI Prompt & Component Transformer)
       // ══════════════════════════════════════════════
       case 'edit': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>✏️ Edit &amp; Annotate &lt;${(d.tag || 'div').toLowerCase()}&gt;</span></div>`;
+        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>✏️ AI Edit &amp; Annotate &lt;${(d.tag || 'div').toLowerCase()}&gt;</span></div>`;
 
         body.innerHTML = `
+          <!-- AI Prompt Box Card -->
+          <div class="qursor-card" style="border-left:3px solid #6366f1;">
+            <div style="font-weight:700;font-size:12px;color:var(--q-text-primary);margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span>✨ AI Component Prompt</span>
+                <span class="node-badge" style="background:rgba(99,102,241,0.15);color:#6366f1;font-size:9px;">LLM Powered</span>
+              </div>
+              <button class="icon-action-btn" id="editApiKeyQuickBtn" style="font-size:10px;" title="Configure API Key">
+                ${this.hasApiKey ? '🔑 API Ready' : '⚠️ Set API Key'}
+              </button>
+            </div>
+            <div style="font-size:11px;color:var(--q-text-muted);margin-bottom:8px;">
+              Describe how to transform this &lt;${(d.tag || 'div').toLowerCase()}&gt; component:
+            </div>
+            <textarea 
+              id="aiEditPromptArea" 
+              class="q-textarea" 
+              style="min-height:75px;resize:vertical;" 
+              placeholder="e.g. 'Make this a dark glassmorphic card with rounded corners, subtle border glow, and modern typography...'"
+            >${_esc(this.aiEditPromptText || '')}</textarea>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <button class="q-btn" id="resetEditBtn" title="Revert to original component before AI edits">
+                ↺ Revert
+              </button>
+              <button 
+                class="q-btn q-btn-primary" 
+                id="applyAiEditBtn" 
+                style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:#fff;font-weight:600;padding:6px 14px;"
+                ${this.isAiGenerating ? 'disabled' : ''}
+              >
+                ${this.isAiGenerating ? '<span>⏳ Generating...</span>' : '⚡ Apply with AI'}
+              </button>
+            </div>
+          </div>
+
+          <!-- Direct Property Overrides (Manual) -->
           <div class="qursor-card">
-            <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:6px;">Direct Property Overrides</div>
+            <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:6px;">Direct Property Overrides (Manual)</div>
             <div class="prop-grid">
               <div class="prop-row"><span class="prop-label">color:</span><input type="text" class="edit-prop-input" data-style-prop="color" value="${_esc(hexColor)}" placeholder="${_esc(hexColor)}" /></div>
               <div class="prop-row"><span class="prop-label">background:</span><input type="text" class="edit-prop-input" data-style-prop="backgroundColor" value="${_esc(hexBg)}" placeholder="${_esc(hexBg)}" /></div>
@@ -1323,23 +1652,14 @@ export class InspectorPanel {
               <div class="prop-row"><span class="prop-label">opacity:</span><input type="text" class="edit-prop-input" data-style-prop="opacity" value="${colors.opacity || '1'}" placeholder="1" /></div>
             </div>
           </div>
-          <div class="qursor-card">
-            <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:4px;">Natural Language Instruction</div>
-            <div style="font-size:10px;color:var(--q-text-muted);margin-bottom:6px;">
-              e.g. "make background blue", "change text to Hello World", "set font size 24px", "make it bold"
-            </div>
-            <textarea id="editInstructionArea" class="q-textarea" style="min-height:60px;" placeholder="Type an instruction to modify this element...">${_esc(this.editInstructionText)}</textarea>
-            <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
-              <button class="q-btn" id="resetEditBtn">↺ Reset</button>
-              <button class="q-btn q-btn-primary" id="applyEditBtn">✓ Apply &amp; Preview</button>
-            </div>
-          </div>
+
+          <!-- Instructions Card -->
           <div class="qursor-card">
             <div style="font-size:10px;color:var(--q-text-muted);line-height:1.6;">
-              <strong style="color:var(--q-text-primary);">How it works:</strong><br/>
-              • Direct property inputs update the element immediately as you type<br/>
-              • Natural language instruction parses text like "make background red", "change font size to 20px"<br/>
-              • Click <strong>"Apply &amp; Preview"</strong> to commit all changes and see them in the Live tab
+              <strong style="color:var(--q-text-primary);">How AI Edit Works:</strong><br/>
+              • Type any design change in the AI box (e.g. "make dark theme", "add hover effect", "turn into pill button")<br/>
+              • Click <strong style="color:#6366f1;">"Apply with AI"</strong> to invoke the LLM model with your API key<br/>
+              • The component is updated in the DOM, the <strong>HTML+CSS</strong> code updates, and the <strong>Live Preview</strong> re-renders immediately!
             </div>
           </div>
         `;
@@ -1395,44 +1715,62 @@ export class InspectorPanel {
       }
 
       // ══════════════════════════════════════════════
-      // 10. PROMPT TAB
-      // ══════════════════════════════════════════════
-      case 'prompt': {
-        triggerBar.innerHTML = `<div class="trigger-input-pill"><span>👤 AI Prompt Builder</span></div>`;
-        const promptContent = this.editedPromptText || generateStructuredAiPrompt(d, this.promptFrameworkTarget);
-
-        body.innerHTML = `
-          <div class="qursor-card">
-            <div class="prop-row">
-              <span class="prop-label">Target Framework</span>
-              <select class="prompt-target-select" style="background:var(--q-bg-primary);color:var(--q-text-primary);border:1px solid var(--q-border);border-radius:6px;padding:4px 8px;font-size:10px;outline:none;">
-                <option value="React" ${this.promptFrameworkTarget === 'React' ? 'selected' : ''}>React</option>
-                <option value="Next.js" ${this.promptFrameworkTarget === 'Next.js' ? 'selected' : ''}>Next.js</option>
-                <option value="Vue 3" ${this.promptFrameworkTarget === 'Vue 3' ? 'selected' : ''}>Vue 3</option>
-                <option value="Angular" ${this.promptFrameworkTarget === 'Angular' ? 'selected' : ''}>Angular</option>
-                <option value="Tailwind CSS" ${this.promptFrameworkTarget === 'Tailwind CSS' ? 'selected' : ''}>Tailwind CSS</option>
-                <option value="Vanilla HTML/CSS/JS" ${this.promptFrameworkTarget === 'Vanilla HTML/CSS/JS' ? 'selected' : ''}>Vanilla</option>
-              </select>
-            </div>
-          </div>
-          <div class="qursor-card">
-            <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:4px;">Generated AI Prompt</div>
-            <textarea class="q-textarea" style="min-height:200px;">${_esc(promptContent)}</textarea>
-            <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
-              <button class="q-btn copy-action-trigger" data-copy-text="${_esc(promptContent)}">📋 Copy AI Prompt</button>
-            </div>
-          </div>
-        `;
-        break;
-      }
-
-      // ══════════════════════════════════════════════
-      // 11. SETTINGS TAB
+      // 9. SETTINGS TAB (API Key & Preferences)
       // ══════════════════════════════════════════════
       case 'settings': {
         const currentEffectiveTheme = this.themeManager.getEffectiveTheme(this.themeManager.currentTheme);
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>⚙️ Extension Settings</span></div>`;
         body.innerHTML = `
+          <!-- LLM API Configuration -->
+          <div class="qursor-card" style="border-left:3px solid #6366f1;">
+            <div style="font-weight:700;font-size:12px;color:var(--q-text-primary);margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span>🤖 LLM API Configuration</span>
+              </div>
+              <span class="node-badge" style="font-size:9px;background:${this.hasApiKey ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'};color:${this.hasApiKey ? '#22c55e' : '#ef4444'};">
+                ${this.hasApiKey ? '✓ Configured' : 'Key Missing'}
+              </span>
+            </div>
+            <div style="font-size:11px;color:var(--q-text-muted);margin-bottom:10px;line-height:1.4;">
+              Configure your API key to power the AI Component Editor in the Edit tab. Keys are stored locally in your browser storage.
+            </div>
+
+            <div class="prop-row" style="margin-bottom:8px;">
+              <span class="prop-label" style="flex-shrink:0;width:80px;">Provider</span>
+              <select id="settingsLlmProvider" style="flex:1;background:var(--q-bg-primary);color:var(--q-text-primary);border:1px solid var(--q-border);border-radius:6px;padding:5px 8px;font-size:11px;outline:none;">
+                <option value="gemini" ${this.llmProvider === 'gemini' ? 'selected' : ''}>Google Gemini (Free Tier / Recommended)</option>
+                <option value="openai" ${this.llmProvider === 'openai' ? 'selected' : ''}>OpenAI (ChatGPT / GPT-4o)</option>
+                <option value="openrouter" ${this.llmProvider === 'openrouter' ? 'selected' : ''}>OpenRouter (All Models)</option>
+                <option value="groq" ${this.llmProvider === 'groq' ? 'selected' : ''}>Groq (Llama-3.3)</option>
+              </select>
+            </div>
+
+            <div class="prop-row" style="margin-bottom:8px;">
+              <span class="prop-label" style="flex-shrink:0;width:80px;">API Key</span>
+              <div style="display:flex;gap:4px;flex:1;">
+                <input 
+                  type="password" 
+                  id="settingsApiKeyInput" 
+                  class="edit-prop-input" 
+                  style="flex:1;font-family:monospace;font-size:11px;padding:6px 8px;border:1px solid var(--q-border);border-radius:6px;background:var(--q-bg-surface);"
+                  placeholder="Enter API Key (e.g. AIza... or sk-...)" 
+                  value="${_esc(this.apiKey || '')}" 
+                />
+                <button class="icon-action-btn" id="toggleApiKeyVisibilityBtn" title="Show/Hide API Key" style="padding:4px 8px;">👁️</button>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+              <span style="font-size:10px;color:var(--q-text-muted);">
+                ${this.hasApiKey ? '🔒 Key saved in local storage' : '⚠️ Required for AI Edit tab'}
+              </span>
+              <button class="q-btn q-btn-primary" id="saveApiKeyBtn" style="background:#6366f1;color:#fff;font-weight:600;">
+                💾 Save Key
+              </button>
+            </div>
+          </div>
+
+          <!-- Appearance -->
           <div class="qursor-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:8px;">Appearance</div>
             <div class="prop-row">
@@ -1446,6 +1784,8 @@ export class InspectorPanel {
               </button>
             </div>
           </div>
+
+          <!-- Keyboard Shortcuts -->
           <div class="qursor-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:8px;">Keyboard Shortcuts</div>
             <div class="prop-grid">
@@ -1453,12 +1793,14 @@ export class InspectorPanel {
               ${_propRow('Exit Inspect Mode', '<kbd style="background:var(--q-bg-surface-elevated);border:1px solid var(--q-border);border-radius:4px;padding:2px 5px;font-family:monospace;font-size:10px;">Escape</kbd>')}
             </div>
           </div>
+
+          <!-- About -->
           <div class="qursor-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:8px;">About Qursor++</div>
             <div class="prop-grid">
               ${_propRow('Version', 'v1.0.0')}
               ${_propRow('Extension', 'Qursor++ AI Inspector')}
-              ${_propRow('Features', 'Live Preview, DOM, Code, Edit, Assets, AI Prompt')}
+              ${_propRow('Features', 'Live Preview, Code, AI Edit, Assets, Settings')}
             </div>
           </div>
         `;
@@ -1504,7 +1846,9 @@ function _esc(str) {
 
 function _escapeAttr(str) {
   if (!str) return '';
-  return str.replace(/"/g, '&quot;');
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;');
 }
 
 function _propRow(label, value) {

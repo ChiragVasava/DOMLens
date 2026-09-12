@@ -32,7 +32,6 @@ export const QURSOR_NAV_TABS = [
   { id: 'code', label: 'Code', icon: '📄' },
   { id: 'edit', label: 'Edit', icon: '💬' },
   { id: 'assets', label: 'Assets', icon: '🖼️' },
-  { id: 'prompt', label: 'AI Prompt', icon: '👤' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 
