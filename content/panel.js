@@ -596,16 +596,21 @@ export class InspectorPanel {
       this.panelContainer.style.top  = `${top}px`;
     });
 
-    // mouseup restores normal state — drag stops immediately on mouse release
+    // Drag stops on any of three events:
+    //  1. mouseup    — mouse button released anywhere
+    //  2. window.mouseleave — cursor exited the browser window
+    //  3. panelContainer.mouseleave — cursor left the pop-up panel itself
     const stopDrag = () => {
       if (!this.isDragging) return;
       this.isDragging = false;
       this.panelContainer.style.userSelect = '';
       this.panelContainer.style.cursor = '';
-      header.style.cursor = 'grab';  // restore header cursor
+      header.style.cursor = 'grab';  // restore grab hint on header
     };
     window.addEventListener('mouseup', stopDrag);
-    window.addEventListener('mouseleave', stopDrag);  // also stop if mouse exits browser
+    window.addEventListener('mouseleave', stopDrag);
+    // Stop drag the moment the cursor leaves the pop-up panel boundary
+    this.panelContainer.addEventListener('mouseleave', stopDrag);
 
     // ─── Theme Toggle Button (header) ───
     themeToggleBtn.addEventListener('click', (e) => {
