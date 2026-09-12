@@ -540,11 +540,24 @@ export class InspectorPanel {
 
     this.shadowRoot.appendChild(this.panelContainer);
 
-    // Initialize theme from storage (async)
+    // Initialize theme from storage (async).
+    // If no theme was saved yet, auto-detect from the page's color scheme.
     this.themeManager.init().then((theme) => {
-      // Update the theme toggle button icon after init
-      const btn = this.panelContainer.querySelector('#themeToggleBtn');
-      if (btn) btn.textContent = theme === THEMES.DARK ? '🌙' : '☀️';
+      // If first run (no stored pref), match the website's color scheme
+      chrome.storage.sync.get(['qursor_theme_preference'], (res) => {
+        let resolvedTheme = theme;
+        if (!res['qursor_theme_preference']) {
+          // Auto-detect: use the page's preferred color scheme
+          const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+          resolvedTheme = prefersLight ? THEMES.LIGHT : THEMES.DARK;
+          this.themeManager.setTheme(resolvedTheme, true); // persist for next time
+        }
+        // Update the theme toggle button:
+        // ☀️ = currently dark  (click to go light)
+        // 🌙 = currently light (click to go dark)
+        const btn = this.panelContainer.querySelector('#themeToggleBtn');
+        if (btn) btn.textContent = resolvedTheme === THEMES.DARK ? '☀️' : '🌙';
+      });
     });
 
     this.setupEventListeners();
@@ -761,14 +774,15 @@ export class InspectorPanel {
 
   _doToggleTheme(headerBtn) {
     const newTheme = this.themeManager.toggleTheme();
-    // Update button icon in header
-    const allThemeBtns = this.panelContainer.querySelectorAll('#themeToggleBtn');
-    allThemeBtns.forEach(btn => {
-      btn.textContent = newTheme === THEMES.DARK ? '🌙' : '☀️';
+    // ☀️ = currently dark  (click to go light)
+    // 🌙 = currently light (click to go dark)
+    const icon = newTheme === THEMES.DARK ? '☀️' : '🌙';
+    this.panelContainer.querySelectorAll('#themeToggleBtn').forEach(btn => {
+      btn.textContent = icon;
     });
-    // Re-render tab content so all inline color values reflect the new theme
+    // Re-render so all inline values reflect the new theme
     this.renderTabContent();
-    this.toastManager.show(`${newTheme === THEMES.DARK ? '🌙' : '☀️'} Switched to ${newTheme.toUpperCase()} mode`, 'info');
+    this.toastManager.show(`Switched to ${newTheme === THEMES.DARK ? 'Dark 🌑' : 'Light ☀️'} mode`, 'info');
   }
 
   _updateNavHighlight() {
@@ -1198,12 +1212,6 @@ export class InspectorPanel {
                   ${_esc(d.selector || 'N/A')} 📋
                 </span>
               </div>
-              <div class="prop-row">
-                <span class="prop-label">XPath</span>
-                <span class="prop-value copy-action-trigger" data-copy-text="${_esc(d.xpath || '')}" style="cursor:pointer;" title="Click to copy">
-                  ${_esc((d.xpath || 'N/A').substring(0, 50))}${(d.xpath || '').length > 50 ? '…' : ''} 📋
-                </span>
-              </div>
             </div>
           </div>
         `;
@@ -1214,10 +1222,11 @@ export class InspectorPanel {
       // 7. CODE TAB
       // ══════════════════════════════════════════════
       case 'code': {
-        // Format selector bar in trigger bar — HTML | HTML+CSS | React
+        // Format selector bar — HTML+CSS | React only
+        // Default to html+css-inline if current format was html_only (now removed)
+        if (this.codeFormat === CODE_FORMATS.HTML_ONLY) this.codeFormat = 'html+css-inline';
         triggerBar.innerHTML = `
           <div class="segment-pill-container">
-            <button class="segment-btn ${this.codeFormat === CODE_FORMATS.HTML_ONLY ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.HTML_ONLY}">HTML</button>
             <button class="segment-btn ${this.codeFormat === 'html+css-inline' ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="html+css-inline">HTML+CSS</button>
             <button class="segment-btn ${this.codeFormat === CODE_FORMATS.REACT ? 'active' : ''}" data-seg-group="codeFormat" data-seg-value="${CODE_FORMATS.REACT}">React</button>
           </div>

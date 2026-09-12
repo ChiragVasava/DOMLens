@@ -29,7 +29,6 @@ export const QURSOR_NAV_TABS = [
   { id: 'typography', label: 'Typography', icon: 'T' },
   { id: 'colors', label: 'Colors', icon: '🎨' },
   { id: 'layout', label: 'Layout', icon: '📐' },
-  { id: 'dom', label: 'DOM Tree', icon: '🌲' },
   { id: 'code', label: 'Code', icon: '📄' },
   { id: 'edit', label: 'Edit', icon: '💬' },
   { id: 'assets', label: 'Assets', icon: '🖼️' },
