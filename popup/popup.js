@@ -39,7 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    let effective = theme;
+    if (theme === THEMES.SYSTEM) {
+      effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? THEMES.DARK
+        : THEMES.LIGHT;
+    }
+    document.documentElement.setAttribute('data-theme', effective);
     themeSwitcher.querySelectorAll('.theme-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.themeVal === theme);
     });

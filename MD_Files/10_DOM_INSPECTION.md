@@ -86,8 +86,6 @@ updateHover(element) {
 
 ---
 
-## 5. Precise XPath Generation Algorithm
+## 5. Component Telemetry & Isolation
 
-`getXPath(element)` generates standard XPath queries:
-- If element has an ID, returns `//*[@id="elementId"]`.
-- Otherwise, computes 1-indexed tag positional paths (e.g. `/html/body/main/div[2]/button[1]`).
+Rather than relying on brittle, context-dependent XPath strings, Qursor++ extracts comprehensive CSS selectors, computed properties, and bounding box geometry. This guarantees robust element tracking across responsive layout changes and dynamic single-page applications.

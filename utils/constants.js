@@ -22,7 +22,7 @@ export const INSPECTOR_STATE = {
   SELECTED: 'SELECTED',
 };
 
-// Qursor++ Master Navigation Bar Tabs
+// Qursor++ Master Navigation Bar Tabs (9 Final Tabs)
 export const QURSOR_NAV_TABS = [
   { id: 'live', label: 'Live', icon: '👁️' },
   { id: 'overview', label: 'Overview', icon: 'ⓘ' },

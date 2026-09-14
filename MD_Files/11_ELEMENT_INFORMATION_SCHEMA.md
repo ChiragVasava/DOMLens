@@ -12,7 +12,6 @@ The `extractElementData(element)` function produces a comprehensive JSON telemet
 interface ElementInspectionPayload {
   tag: string;                       // Uppercase tag name (e.g. "BUTTON")
   selector: string;                  // Unique CSS Selector path
-  xpath: string;                     // XPath query expression
   classes: string[];                 // List of CSS class names
   
   general: {
@@ -75,7 +74,6 @@ interface ElementInspectionPayload {
 {
   "tag": "BUTTON",
   "selector": "main#app > div.container > button.btn-primary",
-  "xpath": "//*[@id=\"app\"]/div/button[1]",
   "classes": ["btn", "btn-primary", "active"],
   "general": {
     "tagName": "BUTTON",

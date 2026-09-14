@@ -14,14 +14,8 @@
 import { mapStylesToTailwind } from './tailwind_mapper.js';
 
 export const CODE_FORMATS = {
-  HTML_ONLY:   'html_only',
-  CSS_ONLY:    'css_only',
-  JS_ONLY:     'js_only',
-  HTML_CSS_JS: 'html_css_js',
-  REACT:       'react',
-  VUE:         'vue',
-  ANGULAR:     'angular',
-  TAILWIND:    'tailwind'
+  HTML_CSS: 'html+css',
+  REACT:    'react'
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -120,7 +114,7 @@ const POLYMER_ATTRS = [
 // ─────────────────────────────────────────────────────────────────
 // Main dispatcher
 // ─────────────────────────────────────────────────────────────────
-export function generateComponentCode(data, format = CODE_FORMATS.HTML_ONLY) {
+export function generateComponentCode(data, format = CODE_FORMATS.HTML_CSS) {
   if (!data) return '';
 
   const rawHtml   = data.general ? data.general.fullOuterHTML : (data.outerHTML || '');
@@ -134,35 +128,21 @@ export function generateComponentCode(data, format = CODE_FORMATS.HTML_ONLY) {
   );
   const tailwindClasses = mapStylesToTailwind(styles, tag);
 
-  switch (format.toLowerCase()) {
-    case CODE_FORMATS.HTML_ONLY:
-      return cleanHtmlSnippet(rawHtml);
-
-    case CODE_FORMATS.CSS_ONLY:
-      return rawCss ||
-        `/* Computed CSS for <${tag}> */\n.${componentName.toLowerCase()} {\n  display: ${(styles.layout || {}).display || 'block'};\n}`;
-
-    case CODE_FORMATS.JS_ONLY:
-      return generateJsOnly(componentName, tag);
-
-    case CODE_FORMATS.HTML_CSS_JS:
-      return generateVanillaBundle(rawHtml, componentName, rawCss);
-
-    case CODE_FORMATS.REACT:
-      return generateReactTailwind(rawHtml, componentName, styles, tailwindClasses, data);
-
-    case CODE_FORMATS.VUE:
-      return generateVueSFC(rawHtml, componentName, rawCss);
-
-    case CODE_FORMATS.ANGULAR:
-      return generateAngularComponent(rawHtml, componentName, rawCss);
-
-    case CODE_FORMATS.TAILWIND:
-      return generateTailwindHTML(rawHtml, tailwindClasses);
-
-    default:
-      return generateVanillaBundle(rawHtml, componentName, rawCss);
+  const fmt = (format || '').toLowerCase();
+  if (fmt === 'react' || fmt === CODE_FORMATS.REACT) {
+    return generateReactTailwind(rawHtml, componentName, styles, tailwindClasses, data);
   }
+
+  // HTML + CSS format
+  return generateHtmlWithCss(rawHtml, rawCss);
+}
+
+function generateHtmlWithCss(html, css) {
+  if (!html) return '';
+  const cleanHtml = html.trim();
+  const cleanCss = (css || '').trim();
+  if (!cleanCss) return cleanHtml;
+  return `${cleanHtml}\n\n<style>\n${cleanCss}\n</style>`;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -186,18 +166,6 @@ function toPascalCase(str) {
 
 function cleanHtmlSnippet(html) {
   return html ? html.trim() : '';
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Vanilla HTML+CSS+JS bundle
-// ─────────────────────────────────────────────────────────────────
-function generateJsOnly(componentName, tag) {
-  return `/**\n * ${componentName} — Interactive Logic\n * Target: <${tag}>\n */\ndocument.addEventListener('DOMContentLoaded', () => {\n  const el = document.querySelector('.${componentName.toLowerCase()}');\n  if (el) el.addEventListener('click', e => console.log('[${componentName}]', e.target));\n});`;
-}
-
-function generateVanillaBundle(html, componentName, rawCss) {
-  const cls = componentName.toLowerCase();
-  return `<!-- ${componentName} -->\n<div class="${cls}">\n${indentCode(html, 2)}\n</div>\n\n<style>\n.${cls} {\n${indentCode(rawCss, 2)}\n}\n</style>\n\n<script>\ndocument.addEventListener('DOMContentLoaded', () => {\n  const el = document.querySelector('.${cls}');\n  if (el) console.log('[${componentName}] ready');\n});\n</script>`;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -436,31 +404,6 @@ function buildPropsJsdoc(data, twClasses) {
 function buildTypedProps(data) {
   const hasChildren = data.general && data.general.textContent && data.general.textContent.trim();
   return hasChildren ? "{ className = '', children, ...props }" : "{ className = '', ...props }";
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Vue SFC
-// ─────────────────────────────────────────────────────────────────
-function generateVueSFC(html, componentName, rawCss) {
-  return `<template>\n${indentCode(html, 2)}\n</template>\n\n<script setup>\n// ${componentName}\n</script>\n\n<style scoped>\n${rawCss || '/* styles */'}\n</style>`;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Angular
-// ─────────────────────────────────────────────────────────────────
-function generateAngularComponent(html, componentName, rawCss) {
-  const sel = 'app-' + componentName.toLowerCase();
-  return `import { Component } from '@angular/core';\n\n@Component({\n  selector: '${sel}',\n  standalone: true,\n  template: \`\n${indentCode(html, 4)}\n  \`,\n  styles: [\`\n${indentCode(rawCss, 4)}\n  \`]\n})\nexport class ${componentName}Component {}`;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Tailwind HTML
-// ─────────────────────────────────────────────────────────────────
-function generateTailwindHTML(html, tailwindClasses) {
-  if (!tailwindClasses) return html;
-  return /\bclass="/.test(html)
-    ? html.replace(/\bclass="([^"]*)"/, (_, e) => `class="${(e + ' ' + tailwindClasses).trim()}"`)
-    : html.replace(/^<([a-zA-Z0-9-]+)/, `<$1 class="${tailwindClasses}"`);
 }
 
 // ─────────────────────────────────────────────────────────────────

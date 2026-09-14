@@ -1,22 +1,24 @@
 # Qursor++ ⚡
 
-> **Point. Inspect. Generate. Build.**
+> **Point. Inspect. Edit with AI. Generate. Build.**
 > 
-> *A Production-Grade Visual HTML Inspector, Computed Style Analyzer, Multi-Framework Component Generator, Asset Tree Scanner, Interactive Style Editor & AI Prompt Builder Chrome Extension.*
+> *A Production-Grade Visual HTML Inspector, Computed Style Analyzer, React (Tailwind JSX) & HTML+CSS Component Generator, Asset Tree Scanner, Natural Language LLM Component Editor & Multi-Provider AI Engine Chrome Extension.*
 
-Qursor++ is a lightweight, high-precision Chrome Extension (Manifest V3) that allows developers, UI engineers, QA automation testers, and AI workflows to visually inspect any HTML element on **ANY website**, extract complete computed styles, box model dimensions, typography, color codes, DOM hierarchy metrics, synthesize multi-framework component code (HTML Only, CSS Only, JS Only, HTML+CSS+JS, React, Vue, Angular, Tailwind), scan full asset trees (including YouTube thumbnails), edit styles live via natural language instructions, and generate AI-agent-ready prompts in 1-click.
+Qursor++ is a lightweight, high-precision Chrome Extension (Manifest V3) that allows developers, UI engineers, and AI workflows to visually inspect any HTML element on **ANY website**, extract complete computed styles, box model dimensions, typography, and color codes, synthesize production-ready React (Tailwind JSX) and HTML+CSS component code, scan full asset trees (including YouTube thumbnails), edit component markup and styles live using natural language AI instructions, and preview components inside a theme-isolated sandbox.
 
 ---
 
-## 🚀 7 Ordered Master Feature Suite
+## 🚀 9 Ordered Navigation Tabs
 
-- 👁️ **1. Live Component Preview**: Isolated iframe rendering with **Zoom Controls** (`-`, `Fit`, `100%`, `+`, `Reset`) and scale percentage badges (`15%` to `300%`).
-- ⓘ **2. Overview & Detailed Metrics**: Tag, ID, classes, ARIA role, accessible name, text content, input value, tabIndex, typography specimen (`AaBbCc...`), text/background color swatches, box model margin & padding diagram, CSS selector, XPath.
-- 📄 **3. Separated Code Export & Synthesizer**: Pure `HTML Only`, `CSS Only`, `JS Only`, `HTML+CSS+JS` bundle, `React JSX`, `Vue 3 SFC`, `Angular Component`, and `Tailwind CSS HTML` with `Selected` vs `Full Page` DOM scope.
-- 💬 **4. Edit & Annotate**: Natural language CSS instruction parser (e.g. `"Make background blue"`, `"Set font size to 24px"`) and direct style inputs. Mutates live component preview and updates exported code snippets.
-- 🖼️ **5. Subtree Asset Scanner**: Scans selected element and child DOM tree for media. Detects YouTube thumbnails, `<img src>`, `srcset`, `data-src`, `data-thumb`, and CSS `background-image: url(...)`. Filters by `All`, `Images`, `SVG`, `PNG`, `JPG`, `WEBP`, `GIF`, `Other` with preview cards, URL copy, and 1-click download.
-- 👤 **6. Structured AI Prompt Builder**: Synthesizes detailed markdown prompts formatted for AI coding agents (Cursor, Claude, Antigravity, ChatGPT). Includes target framework selector, editable prompt textarea, copy prompt button, download `.md` file button.
-- ⚙️ **7. Extension Settings & Theme Engine**: Synchronized Dark, Light, and System theme engine (`ThemeManager`) with `chrome.storage.sync` persistence and keyboard shortcuts (`Ctrl+Shift+I`, `ESC`).
+- 👁️ **1. Live Preview**: Isolated iframe rendering with **Canvas Background Isolation** (`#000000` Dark vs `#FFFFFF` Light preserving component backgrounds) and zoom controls (`-`, `Fit`, `100%`, `+`).
+- ⓘ **2. Overview**: Element tag, dimensions, unique CSS selector, DOM depth level, and quick action buttons.
+- 🔤 **3. Typography**: Font family, font size, weight, line-height, letter-spacing, and text alignment.
+- 🎨 **4. Colors**: Text color, background color, border color, and visual color swatch pills.
+- 📐 **5. Layout**: Interactive visual box model diagram (margin, padding, content) and flex/grid telemetry.
+- 📄 **6. Code**: Component synthesizer with strictly two options: **HTML+CSS** and **React** (Tailwind JSX with Web Component sanitization), plus 1-click AI generation.
+- 💬 **7. Edit**: Natural language LLM component editor with instruction prompt textarea, Apply, and Reset rollback.
+- 🖼️ **8. Assets**: Deep DOM subtree media scanner (YouTube thumbnails, `<img>`, `srcset`, inline SVGs, CSS backgrounds, `<video>`) with format filter pills (`All`, `Images`, `SVG`, `PNG`, `JPG`, `WEBP`, `GIF`, `Other`).
+- ⚙️ **9. Settings**: Multi-provider AI configuration (Google Gemini, OpenAI, OpenRouter, Groq) with masked API key storage and theme switcher.
 
 ---
 

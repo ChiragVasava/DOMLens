@@ -1,7 +1,7 @@
 /**
  * Website Inspector AI - Selector Utility
  * 
- * Provides robust algorithm for generating precise CSS selectors and XPath queries
+ * Provides robust algorithm for generating precise CSS selectors
  * for target DOM elements.
  */
 
@@ -90,49 +90,3 @@ export function getCssSelector(element) {
   return path.join(' > ');
 }
 
-/**
- * Generates an XPath string for a target element
- * @param {Element} element 
- * @returns {string}
- */
-export function getXPath(element) {
-  if (!(element instanceof Element)) return '';
-
-  if (element.id) {
-    return `//*[@id="${element.id}"]`;
-  }
-
-  const paths = [];
-
-  for (; element && element.nodeType === Node.ELEMENT_NODE; element = element.parentElement) {
-    let index = 0;
-    let hasSiblings = false;
-
-    if (element.parentElement) {
-      const siblings = element.parentElement.children;
-      for (let i = 0; i < siblings.length; i++) {
-        const sibling = siblings[i];
-        if (sibling === element) {
-          index = i + 1;
-          break;
-        }
-      }
-
-      // Check if there are other siblings with the same tag name
-      for (let i = 0; i < siblings.length; i++) {
-        if (siblings[i].nodeName === element.nodeName && siblings[i] !== element) {
-          hasSiblings = true;
-          break;
-        }
-      }
-    }
-
-    const tagName = element.nodeName.toLowerCase();
-    const pathIndex = (hasSiblings || index > 1) ? `[${index}]` : '';
-    paths.unshift(`${tagName}${pathIndex}`);
-
-    if (tagName === 'html') break;
-  }
-
-  return paths.length ? '/' + paths.join('/') : '';
-}

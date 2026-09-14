@@ -186,13 +186,18 @@ class QursorEngine {
         // Theme changed from popup — propagate to the panel's theme manager
         if (this.panel && this.panel.themeManager) {
           this.panel.themeManager.setTheme(message.theme, false);
-          // Update theme toggle icon in panel header
+          if (this.panel.state) {
+            this.panel.state.setTheme(message.theme);
+          }
           const headerBtn = this.panel.panelContainer
             ? this.panel.panelContainer.querySelector('#themeToggleBtn')
             : null;
           if (headerBtn) {
             const effective = this.panel.themeManager.getEffectiveTheme(message.theme);
-            headerBtn.textContent = effective === 'dark' ? '🌙' : '☀️';
+            headerBtn.textContent = effective === 'dark' ? '☀️' : '🌙';
+          }
+          if (typeof this.panel.renderTabContent === 'function') {
+            this.panel.renderTabContent();
           }
         }
         break;

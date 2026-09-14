@@ -6,7 +6,7 @@
  * Supports YouTube thumbnails, lazy-loaded images, SVG graphics, and dynamic media containers.
  */
 
-import { getCssSelector, getXPath } from '../utils/selector.js';
+import { getCssSelector } from '../utils/selector.js';
 import { getDomHierarchy, getElementAttributes, getCleanTextContent } from '../utils/dom.js';
 import { extractComputedStyles, getRawCssString } from '../utils/style.js';
 
@@ -21,7 +21,6 @@ export function extractElementData(element) {
   const tag = element.tagName.toLowerCase();
   const attributes = getElementAttributes(element);
   const selector = getCssSelector(element);
-  const xpath = getXPath(element);
   const domInfo = getDomHierarchy(element);
   const styles = extractComputedStyles(element);
   const rawCss = getRawCssString(element);
@@ -68,7 +67,6 @@ export function extractElementData(element) {
   return {
     tag: general.tagName,
     selector,
-    xpath,
     classes: general.classList,
     general,
     dom: domInfo,

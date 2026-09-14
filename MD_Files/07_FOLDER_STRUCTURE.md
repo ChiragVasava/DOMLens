@@ -3,7 +3,7 @@
 ```text
 DOMLens/
 ├── manifest.json                  # Manifest V3 extension configuration
-├── README.md                      # Project root documentation & quick start guide
+├── README.md                      # Project root documentation & user guide
 ├── LICENSE                        # Open source license file
 ├── .gitignore                     # Git tracking exclusions
 │
@@ -21,8 +21,8 @@ DOMLens/
 │   ├── loader.js                  # Entry content script loading ES modules
 │   ├── inspector.js               # Inspector state machine & event orchestrator
 │   ├── overlay.js                 # Shadow DOM bounding box & hover overlay manager
-│   ├── panel.js                   # Movable, resizable 11-tab Shadow DOM floating UI panel
-│   └── extractor.js               # Analytical data extraction engine
+│   ├── panel.js                   # Movable 9-tab Shadow DOM floating UI panel
+│   └── extractor.js               # Analytical DOM & computed styles extraction engine
 │
 ├── popup/                         # Extension Popup toolbar UI
 │   ├── popup.html                 # Main popup interface HTML structure
@@ -30,9 +30,17 @@ DOMLens/
 │   └── popup.js                   # Popup state controller script
 │
 ├── utils/                         # Modular shared helper utilities
-│   ├── constants.js               # Global action keys, UI states & theme constants
+│   ├── component_state.js         # Single authoritative component state model & pub/sub
+│   ├── preview_renderer.js        # Isolated iframe srcdoc renderer with theme canvas isolation
+│   ├── llm_service.js             # Multi-provider LLM service (Gemini, OpenAI, OpenRouter, Groq)
+│   ├── component_generator.js     # React (Tailwind JSX) and HTML+CSS code synthesizer
+│   ├── tailwind_mapper.js         # CSS to Tailwind utility & arbitrary value mapper
+│   ├── asset_extractor.js         # Media scanner (thumbnails, images, SVGs, video, backgrounds)
+│   ├── theme.js                   # Theme management (dark/light/system) engine
+│   ├── toast.js                   # Non-blocking glassmorphic UI toast notifications
+│   ├── constants.js               # Global action keys, 9 nav tabs, & theme constants
 │   ├── dom.js                     # DOM tree hierarchy, node depth & attribute helpers
-│   ├── selector.js                # Unique CSS selector & XPath generator
+│   ├── selector.js                # Unique CSS selector generator (XPath completely purged)
 │   ├── style.js                   # Computed style parser & RGB-to-Hex converter
 │   └── clipboard.js               # Async clipboard copier with fallback
 │
