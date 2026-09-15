@@ -109,14 +109,31 @@ export function extractComponentHTML(element) {
   // Resolve relative URLs for images, media, links
   const base = document.baseURI || window.location.href;
 
-  clone.querySelectorAll('img').forEach(img => {
-    const src = img.getAttribute('src');
-    if (src) {
+  const origImgs = element.tagName.toLowerCase() === 'img'
+    ? [element]
+    : Array.from(element.querySelectorAll('img'));
+  const cloneImgs = clone.tagName.toLowerCase() === 'img'
+    ? [clone]
+    : Array.from(clone.querySelectorAll('img'));
+
+  cloneImgs.forEach((img, idx) => {
+    const orig = origImgs[idx];
+    // Prioritize active currentSrc (critical for YouTube, lazy images, SPAs)
+    const realSrc = (orig && (orig.currentSrc || orig.src))
+      || img.getAttribute('src')
+      || (orig && (orig.getAttribute('data-thumb') || orig.getAttribute('data-src') || orig.getAttribute('data-thumbnail-src')))
+      || img.getAttribute('data-thumb')
+      || img.getAttribute('data-src');
+
+    if (realSrc) {
       try {
-        img.setAttribute('src', new URL(src, base).href);
-      } catch (e) {}
+        img.setAttribute('src', new URL(realSrc, base).href);
+      } catch (e) {
+        img.setAttribute('src', realSrc);
+      }
     }
-    const srcset = img.getAttribute('srcset');
+
+    const srcset = (orig && orig.getAttribute('srcset')) || img.getAttribute('srcset');
     if (srcset) {
       try {
         const resolved = srcset.split(',').map(part => {
@@ -188,44 +205,105 @@ export function extractComponentHTML(element) {
 export function extractComponentCSS(element) {
   if (!(element instanceof Element)) return '';
 
+  const rect = element.getBoundingClientRect();
+  const widthPx = Math.round(rect.width);
+  const heightPx = Math.round(rect.height);
+
   const rules = [];
+
+  const CSS_PROPS = [
+    // Layout
+    'display', 'position', 'box-sizing',
+    'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+    'overflow', 'overflow-x', 'overflow-y',
+    // Spacing
+    'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    // Flex
+    'flex', 'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
+    'justify-content', 'align-items', 'align-content', 'align-self', 'gap', 'row-gap', 'column-gap',
+    // Grid
+    'grid-template-columns', 'grid-template-rows', 'grid-column', 'grid-row',
+    'grid-auto-columns', 'grid-auto-rows', 'place-items', 'justify-items',
+    // Typography
+    'font-family', 'font-size', 'font-weight', 'font-style', 'line-height',
+    'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
+    'white-space', 'word-break', 'overflow-wrap',
+    // Visual & Colors
+    'color', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
+    'opacity', 'box-shadow', 'text-shadow', 'filter', 'backdrop-filter', 'transform', 'transform-origin',
+    // Borders
+    'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+    'border-width', 'border-style', 'border-color',
+    'border-radius', 'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
+    // Media & Other
+    'object-fit', 'object-position', 'aspect-ratio', 'vertical-align', 'visibility', 'cursor', 'z-index'
+  ];
 
   function buildDeclarations(el, isRoot = false) {
     const cs = window.getComputedStyle(el);
-    const props = [
-      'display', 'position', 'box-sizing',
-      'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-      'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-      'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-      'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
-      'color', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
-      'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
-      'border-radius', 'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
-      'box-shadow', 'opacity', 'overflow', 'cursor', 'z-index',
-      'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'align-self', 'gap', 'row-gap', 'column-gap',
-      'grid-template-columns', 'grid-template-rows', 'grid-column', 'grid-row'
-    ];
-
     const lines = [];
-    for (const prop of props) {
+
+    for (const prop of CSS_PROPS) {
+      // Phase 4 compliance: Never force page-level position/offsets onto the root component
+      if (isRoot) {
+        if (prop === 'position') {
+          lines.push('  position: relative !important;');
+          continue;
+        }
+        if (prop === 'top' || prop === 'left' || prop === 'right' || prop === 'bottom') {
+          lines.push(`  ${prop}: auto !important;`);
+          continue;
+        }
+        if (prop === 'margin' || prop === 'margin-top' || prop === 'margin-left' || prop === 'margin-right' || prop === 'margin-bottom') {
+          // Normalize root margins so component is neatly centered inside canvas
+          if (prop === 'margin') lines.push('  margin: 0 auto !important;');
+          continue;
+        }
+      }
+
       const val = cs.getPropertyValue(prop);
       if (!val) continue;
-      if (val === 'none' && (prop === 'background-image' || prop === 'box-shadow' || prop === 'text-decoration')) continue;
-      if (val === 'auto' && (prop === 'z-index' || prop === 'width' || prop === 'height') && !isRoot) continue;
-      if (val === 'normal' && (prop === 'line-height' || prop === 'letter-spacing' || prop === 'gap')) continue;
+      if (val === 'none' && (prop === 'background-image' || prop === 'box-shadow' || prop === 'text-decoration' || prop === 'text-shadow' || prop === 'filter' || prop === 'transform')) continue;
+      if (val === 'auto' && (prop === 'z-index' || (!isRoot && (prop === 'width' || prop === 'height' || prop === 'min-width' || prop === 'min-height')))) continue;
+      if (val === 'normal' && (prop === 'line-height' || prop === 'letter-spacing' || prop === 'gap' || prop === 'row-gap' || prop === 'column-gap')) continue;
       if (val === '0px' && (prop.startsWith('margin') || prop.startsWith('padding') || prop.startsWith('border-radius'))) continue;
       if (val === 'rgba(0, 0, 0, 0)' && (prop === 'background-color' || prop.includes('color'))) continue;
       if (val === '0px none rgb(0, 0, 0)' || val === '0px none rgb(255, 255, 255)') continue;
 
       lines.push(`  ${prop}: ${val};`);
     }
+
+    // Preserve root bounding box width so responsive containers don't arbitrarily collapse or stretch
+    if (isRoot && widthPx > 20) {
+      lines.push(`  width: ${widthPx}px;`);
+      lines.push(`  max-width: 100%;`);
+      lines.push(`  box-sizing: border-box;`);
+    }
+
     return lines.join('\n');
+  }
+
+  function getRelativePath(child, root) {
+    const path = [];
+    let curr = child;
+    while (curr && curr !== root && curr !== document.body) {
+      const parent = curr.parentElement;
+      if (!parent) break;
+      const tag = curr.tagName.toLowerCase();
+      const siblings = Array.from(parent.children);
+      const index = siblings.indexOf(curr) + 1;
+      path.unshift(`${tag}:nth-child(${index})`);
+      curr = parent;
+    }
+    return path.join(' > ');
   }
 
   // 1. Root element styles
   const rootTag = element.tagName.toLowerCase();
   const rootId = element.id ? `#${element.id}` : '';
-  const rootClass = element.classList.length ? `.${Array.from(element.classList).join('.')}` : '';
+  const rootClasses = Array.from(element.classList).filter(c => !c.startsWith('website-inspector'));
+  const rootClass = rootClasses.length ? `.${rootClasses.join('.')}` : '';
   const rootSelector = rootId || (rootClass ? `${rootTag}${rootClass}` : rootTag);
 
   const rootDecls = buildDeclarations(element, true);
@@ -233,31 +311,20 @@ export function extractComponentCSS(element) {
     rules.push(`/* Root: <${rootTag}> */\n${rootSelector} {\n${rootDecls}\n}`);
   }
 
-  // 2. Descendants (up to 50 elements)
-  const descendants = Array.from(element.querySelectorAll('*')).slice(0, 50);
-  const seenSelectors = new Set();
-  seenSelectors.add(rootSelector);
+  // 2. Descendants (up to 80 elements with 100% unique structural path)
+  const descendants = Array.from(element.querySelectorAll('*')).slice(0, 80);
 
   for (const child of descendants) {
-    const cTag = child.tagName.toLowerCase();
-    const cId = child.id ? `#${child.id}` : '';
-    const cClasses = Array.from(child.classList).filter(c => !c.startsWith('website-inspector'));
-    let cSel = '';
+    // Skip internal inspector elements
+    if (child.closest('#website-inspector-root')) continue;
 
-    if (cId) {
-      cSel = cId;
-    } else if (cClasses.length) {
-      cSel = `${rootSelector} .${cClasses[0]}`;
-    } else {
-      cSel = `${rootSelector} ${cTag}`;
-    }
+    const relPath = getRelativePath(child, element);
+    if (!relPath) continue;
 
-    if (seenSelectors.has(cSel)) continue;
-    seenSelectors.add(cSel);
-
+    const selector = `${rootSelector} > ${relPath}`;
     const decls = buildDeclarations(child, false);
     if (decls) {
-      rules.push(`${cSel} {\n${decls}\n}`);
+      rules.push(`${selector} {\n${decls}\n}`);
     }
   }
 

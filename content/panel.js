@@ -29,7 +29,8 @@ import {
   clearLlmConfig,
   maskApiKey,
   LLM_PROVIDERS,
-  DEFAULT_MODELS
+  DEFAULT_MODELS,
+  DEFAULT_GEMINI_MODEL
 } from '../utils/llm_service.js';
 
 export class InspectorPanel {
@@ -616,11 +617,16 @@ export class InspectorPanel {
       });
     });
 
-    // ─── Dragging Logic (Section 24 Compliance) ───
-    // Floating panel moves ONLY while mouse button is held down
-    header.addEventListener('mousedown', (e) => {
+    // ─── Dragging Logic (Pointer Capture & Iframe Shielding) ───
+    const setIframesShield = (shield) => {
+      this.panelContainer.querySelectorAll('iframe').forEach(frame => {
+        frame.style.pointerEvents = shield ? 'none' : '';
+      });
+    };
+
+    const onDragStart = (e) => {
       // Ignore clicks on buttons, inputs, links, or nav icons
-      if (e.target.closest('button, input, textarea, select, a, .nav-icon-btn, .nav-action-btn')) {
+      if (e.target.closest('button, input, textarea, select, a, .nav-icon-btn, .nav-action-btn, .zoom-btn')) {
         return;
       }
       e.preventDefault();
@@ -628,6 +634,16 @@ export class InspectorPanel {
       this.panelContainer.style.userSelect = 'none';
       this.panelContainer.style.cursor = 'grabbing';
       header.style.cursor = 'grabbing';
+
+      // Shield iframe so mouse events are never swallowed by iframe preview document
+      setIframesShield(true);
+
+      if (header.setPointerCapture && e.pointerId !== undefined) {
+        try {
+          header.setPointerCapture(e.pointerId);
+          this._activePointerId = e.pointerId;
+        } catch (err) {}
+      }
 
       const rect = this.panelContainer.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
@@ -637,30 +653,51 @@ export class InspectorPanel {
       this.panelContainer.style.left = `${rect.left}px`;
       this.panelContainer.style.bottom = 'auto';
       this.panelContainer.style.right = 'auto';
-    });
+    };
 
-    window.addEventListener('mousemove', (e) => {
+    header.addEventListener('pointerdown', onDragStart);
+    header.addEventListener('mousedown', onDragStart);
+
+    const onDragMove = (e) => {
       if (!this.isDragging) return;
       e.preventDefault();
       const panelW = this.panelContainer.offsetWidth;
       const panelH = this.panelContainer.offsetHeight;
-      const left = Math.max(0, Math.min(window.innerWidth - panelW, e.clientX - this.dragOffsetX));
-      const top = Math.max(0, Math.min(window.innerHeight - panelH, e.clientY - this.dragOffsetY));
+      const maxLeft = Math.max(0, window.innerWidth - panelW);
+      const maxTop = Math.max(0, window.innerHeight - panelH);
+      const left = Math.max(0, Math.min(maxLeft, e.clientX - this.dragOffsetX));
+      const top = Math.max(0, Math.min(maxTop, e.clientY - this.dragOffsetY));
       this.panelContainer.style.left = `${left}px`;
       this.panelContainer.style.top = `${top}px`;
-    });
+    };
 
-    const stopDrag = () => {
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('mousemove', onDragMove);
+
+    const stopDrag = (e) => {
       if (!this.isDragging) return;
       this.isDragging = false;
       this.panelContainer.style.userSelect = '';
       this.panelContainer.style.cursor = '';
       header.style.cursor = 'grab';
+
+      // Restore iframe pointer interactions
+      setIframesShield(false);
+
+      if (header.releasePointerCapture && this._activePointerId !== undefined) {
+        try {
+          header.releasePointerCapture(this._activePointerId);
+        } catch (err) {}
+        this._activePointerId = undefined;
+      }
     };
 
-    // Release mouse anywhere stops drag; moving cursor outside panel does NOT prematurely cancel
+    // Safety mechanisms: release dragging on pointerup, mouseup, pointercancel, blur, or window leave
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
     window.addEventListener('mouseup', stopDrag);
     window.addEventListener('blur', stopDrag);
+    document.addEventListener('mouseleave', stopDrag);
 
     // ─── Theme Toggle Button (header) ───
     themeToggleBtn.addEventListener('click', (e) => {
@@ -710,9 +747,9 @@ export class InspectorPanel {
         e.stopPropagation();
         const action = zoomBtn.dataset.zoomAction;
         const d = this.state.original.elementData;
-        const targetWidth = (d.widthPx && d.widthPx > 50) ? d.widthPx : 420;
-        const targetHeight = (d.heightPx && d.heightPx > 50) ? d.heightPx : 300;
-        const autoScale = parseFloat(Math.min(390 / targetWidth, 240 / targetHeight, 1.0).toFixed(3));
+        const targetWidth = (this.state.preview.width && this.state.preview.width > 20) ? this.state.preview.width : ((d.widthPx && d.widthPx > 20) ? d.widthPx : 400);
+        const targetHeight = (this.state.preview.height && this.state.preview.height > 20) ? this.state.preview.height : ((d.heightPx && d.heightPx > 20) ? d.heightPx : 300);
+        const autoScale = parseFloat(Math.min(390 / targetWidth, 260 / targetHeight, 1.0).toFixed(3));
         let currentZoom = (this.state.zoom !== null) ? this.state.zoom : autoScale;
 
         if (action === 'in') this.state.setZoom(parseFloat(Math.min(3.0, currentZoom + 0.15).toFixed(2)));
@@ -1003,9 +1040,9 @@ export class InspectorPanel {
       // 1. LIVE TAB (Isolated HTML + CSS Preview)
       // ══════════════════════════════════════════════
       case 'live': {
-        const targetWidth = (d.widthPx && d.widthPx > 10) ? d.widthPx : 400;
-        const targetHeight = (d.heightPx && d.heightPx > 10) ? d.heightPx : 300;
-        const autoScale = parseFloat(Math.min(390 / targetWidth, 240 / targetHeight, 1.0).toFixed(3));
+        const targetWidth = (this.state.preview.width && this.state.preview.width > 20) ? this.state.preview.width : ((d.widthPx && d.widthPx > 20) ? d.widthPx : 400);
+        const targetHeight = (this.state.preview.height && this.state.preview.height > 20) ? this.state.preview.height : ((d.heightPx && d.heightPx > 20) ? d.heightPx : 300);
+        const autoScale = parseFloat(Math.min(390 / targetWidth, 260 / targetHeight, 1.0).toFixed(3));
         const activeZoom = (this.state.zoom !== null) ? this.state.zoom : autoScale;
         const scalePercent = Math.round(activeZoom * 100);
 
@@ -1041,8 +1078,8 @@ export class InspectorPanel {
             <span>COMPONENT LIVE FRAME</span>
             <span class="node-badge">${targetWidth}×${targetHeight}px • Canvas: ${effectiveTheme.toUpperCase()}</span>
           </div>
-          <div class="qursor-card" style="padding:4px;background:${canvasBg};border:1px solid var(--q-border);">
-            <iframe id="livePreviewFrame" style="width:100%;height:270px;border:none;border-radius:8px;background:${canvasBg};" srcdoc="${_escapeAttr(previewHtml)}"></iframe>
+          <div class="qursor-card" style="padding:4px;background:${canvasBg};border:1px solid var(--q-border);flex:1;min-height:280px;display:flex;">
+            <iframe id="livePreviewFrame" style="width:100%;flex:1;min-height:280px;border:none;border-radius:8px;background:${canvasBg};" srcdoc="${_escapeAttr(previewHtml)}"></iframe>
           </div>
           ${this.state.current.changes.length > 0 ? `
             <div class="alert-box success">
@@ -1415,7 +1452,7 @@ export class InspectorPanel {
               <div class="prop-row">
                 <span class="prop-label">Model:</span>
                 <input type="text" id="settingsModelInput" class="q-input" 
-                       value="${_esc(this.llmConfig.model || DEFAULT_MODELS[this.llmConfig.provider] || 'gemini-2.0-flash')}" />
+                       value="${_esc(this.llmConfig.model || DEFAULT_MODELS[this.llmConfig.provider] || DEFAULT_GEMINI_MODEL)}" />
               </div>
             </div>
 

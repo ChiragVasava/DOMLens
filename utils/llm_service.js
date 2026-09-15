@@ -13,17 +13,20 @@ export const LLM_PROVIDERS = {
   GROQ: 'groq'
 };
 
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+
 export const DEFAULT_MODELS = {
-  [LLM_PROVIDERS.GEMINI]: 'gemini-2.0-flash',
+  [LLM_PROVIDERS.GEMINI]: DEFAULT_GEMINI_MODEL,
   [LLM_PROVIDERS.OPENAI]: 'gpt-4o-mini',
   [LLM_PROVIDERS.OPENROUTER]: 'google/gemini-2.0-flash-001',
   [LLM_PROVIDERS.GROQ]: 'llama-3.3-70b-versatile'
 };
 
 export const VERIFIED_GEMINI_MODELS = [
+  'gemini-3.8-flash',
   'gemini-2.0-flash',
-  'gemini-1.5-flash-latest',
   'gemini-2.5-flash',
+  'gemini-1.5-flash-latest',
   'gemini-1.5-pro-latest'
 ];
 
@@ -92,10 +95,10 @@ export async function getLlmConfig() {
     chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], (res) => {
       const apiKey = (res.qursor_api_key || '').trim();
       const provider = res.qursor_llm_provider || detectProvider(apiKey);
-      let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || 'gemini-2.0-flash';
-      // If user had the obsolete gemini-1.5-flash stored, upgrade it to gemini-2.0-flash
-      if (model === 'gemini-1.5-flash') {
-        model = 'gemini-2.0-flash';
+      let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL;
+      // Upgrade obsolete or superseded models to latest stable Flash model
+      if (model.includes('1.5') || model === 'gemini-2.0-flash' || model === 'gemini-2.5-flash' || model === 'gemini-3.6-flash') {
+        model = DEFAULT_GEMINI_MODEL;
       }
       resolve({
         apiKey,
@@ -117,9 +120,9 @@ export async function getLlmConfig() {
 export async function saveLlmConfig(apiKey, provider = null, model = null) {
   const cleanKey = (apiKey || '').trim();
   const resolvedProvider = provider || detectProvider(cleanKey);
-  let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || 'gemini-2.0-flash';
-  if (resolvedModel === 'gemini-1.5-flash') {
-    resolvedModel = 'gemini-2.0-flash';
+  let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || DEFAULT_GEMINI_MODEL;
+  if (resolvedModel.includes('1.5') || resolvedModel === 'gemini-2.0-flash' || resolvedModel === 'gemini-2.5-flash' || resolvedModel === 'gemini-3.6-flash') {
+    resolvedModel = DEFAULT_GEMINI_MODEL;
   }
 
   return new Promise((resolve) => {
@@ -151,7 +154,7 @@ export async function clearLlmConfig() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Core HTTP Fetch with Timeout & Error Normalization
+// Core HTTP Fetch with Timeout, Schema Support & Error Normalization
 // ─────────────────────────────────────────────────────────────────
 
 async function executeLlmRequest({ provider, model, apiKey, messages, temperature = 0.2, jsonMode = false }) {
@@ -175,6 +178,18 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
 
       if (jsonMode) {
         bodyPayload.generationConfig.responseMimeType = 'application/json';
+        bodyPayload.generationConfig.responseSchema = {
+          type: 'OBJECT',
+          properties: {
+            html: { type: 'STRING' },
+            css: { type: 'STRING' },
+            changes: {
+              type: 'ARRAY',
+              items: { type: 'STRING' }
+            }
+          },
+          required: ['html', 'css', 'changes']
+        };
       }
 
       const res = await fetch(endpoint, {
@@ -187,12 +202,19 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const code = res.status;
-        if (code === 400 || code === 403 || code === 401) {
-          throw new Error('Authentication failed. Please verify your Gemini API key in Settings.');
+        const detail = errData.error?.message || res.statusText || 'Unknown error';
+
+        if (code === 404) {
+          throw new Error(`Configured Gemini model (${model}) is unavailable. Please select a supported model in Settings.`);
+        } else if (code === 401 || code === 403) {
+          throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
         } else if (code === 429) {
-          throw new Error('Rate limit exceeded. Please wait a moment before trying again.');
+          throw new Error('Gemini API rate limit exceeded (429). Please wait a moment before trying again.');
+        } else if (code === 503 || code === 500) {
+          throw new Error(`Gemini server temporarily unavailable (${code}). Server busy or no model capacity. Please retry shortly.`);
+        } else if (code === 400) {
+          throw new Error(`Gemini API bad request (400): ${detail}`);
         } else {
-          const detail = errData.error?.message || res.statusText;
           throw new Error(`Gemini API Error (${code}): ${detail}`);
         }
       }
@@ -234,12 +256,15 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const code = res.status;
+        const detail = errData.error?.message || res.statusText || 'Unknown error';
+
         if (code === 401 || code === 403) {
           throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
         } else if (code === 429) {
           throw new Error(`Rate limit exceeded on ${provider.toUpperCase()}. Please wait before retrying.`);
+        } else if (code === 503 || code === 500) {
+          throw new Error(`${provider.toUpperCase()} service temporarily unavailable (${code}). Please retry shortly.`);
         } else {
-          const detail = errData.error?.message || res.statusText;
           throw new Error(`${provider.toUpperCase()} API Error (${code}): ${detail}`);
         }
       }
@@ -260,7 +285,7 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Helper: Safe JSON Parser with Code-Fence Stripping
+// Helper: Safe JSON Parser with Code-Fence Stripping & Robust Extraction
 // ─────────────────────────────────────────────────────────────────
 
 function safeParseJson(rawText) {
@@ -268,41 +293,36 @@ function safeParseJson(rawText) {
   // 1. Direct parse attempt
   try {
     return JSON.parse(rawText);
-  } catch (e) {
-    // continue to extraction
-  }
+  } catch (e) {}
 
   // 2. Strip markdown code fences ```json ... ``` or ``` ... ```
   const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenceMatch && fenceMatch[1]) {
     try {
       return JSON.parse(fenceMatch[1].trim());
-    } catch (e) {
-      // continue
-    }
+    } catch (e) {}
   }
 
-  // 3. Find first { and last }
+  // 3. Find outermost { and }
   const firstBrace = rawText.indexOf('{');
   const lastBrace = rawText.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     const candidate = rawText.substring(firstBrace, lastBrace + 1);
     try {
       return JSON.parse(candidate);
-    } catch (e) {
-      // continue
-    }
+    } catch (e) {}
   }
 
   return null;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 1. Edit Component with LLM (Structured JSON Output)
+// 1. Edit Component with LLM (Structured JSON Output & Minimal Surgery)
 // ─────────────────────────────────────────────────────────────────
 
 /**
  * Calls the LLM to edit the component according to natural language instructions.
+ * Enforces surgical modifications on existing component without redesigning unrelated styles.
  * Returns validated structured data: { html, css, changes }
  * 
  * @param {Object} params
@@ -319,53 +339,72 @@ export async function callLlmEditComponent({ instruction, currentHtml, currentCs
     throw new Error('API key not configured. Please open Settings and enter your API key.');
   }
 
-  const systemPrompt = `You are a principal UI/UX frontend engineer specializing in precision DOM element manipulation.
-Your task is to modify the provided HTML and CSS according to the user's instruction while maintaining the highest visual and structural fidelity.
+  const systemPrompt = `You are editing an existing HTML/CSS component.
 
-CRITICAL REQUIREMENTS:
-1. Return your response ONLY as a single valid JSON object with the exact keys:
+CRITICAL EDIT PRINCIPLES:
+1. You are modifying an EXISTING component, NOT creating a new design from scratch.
+2. PRESERVE EVERYTHING that the user did not explicitly request to change.
+3. Modify ONLY what is necessary to satisfy the user's instruction.
+4. DO NOT change dimensions, typography, spacing, layout, colors, assets, or structure unless the user's instruction requires it.
+5. Example: If the user says 'Change Sunita Williams to Einstein Williams', change ONLY that text and keep all other text, fonts, images, sizes, and colors 100% untouched.
+6. Return your response as a strict JSON object matching this schema:
    {
-     "html": "<updated HTML markup for the component>",
-     "css": "<updated CSS rules or inline styles needed to render the component>",
-     "changes": ["summary of change 1", "summary of change 2"]
+     "html": "<complete updated HTML>",
+     "css": "<complete updated CSS>",
+     "changes": ["<concise description of each applied change>"]
    }
-2. DO NOT return markdown fences outside the JSON. DO NOT include explanations, greetings, or commentary.
-3. Preserve existing component structure, nesting, text, assets, and classes unless the instruction explicitly requests changing them.
-4. Keep the component self-contained: ensure any styles needed for the changes are included either inline in the HTML or in the "css" string.
-5. Apply ONLY what is required by the user instruction. Do not rewrite unrelated styling.
-6. The HTML must have a single root element matching the inspected component.
-7. Canvas Theme context: ${theme} mode (Canvas is ${theme === 'dark' ? '#000000' : '#FFFFFF'}).
-8. Never use external framework dependencies (e.g. no React/Vue syntax in HTML/CSS). Return clean, standards-compliant HTML+CSS.`;
+7. Return clean standards-compliant HTML and CSS. Single root element matching inspected element.
+8. No markdown code blocks outside JSON. No explanatory preamble.`;
 
   const tag = elementData?.tag || 'element';
-  const userPrompt = `Inspected Target: <${tag}>
-Current HTML:
+  const userPrompt = `Target Component: <${tag}>
+Current Component HTML:
 ${currentHtml}
 
-Current CSS:
+Current Component CSS:
 ${currentCss || '/* none */'}
 
 User Instruction:
 "${instruction}"
 
-Return the updated component as strict JSON:
-{"html": "...", "css": "...", "changes": [...]}`;
+Return the complete updated component JSON:`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt }
   ];
 
-  const rawResult = await executeLlmRequest({
+  let rawResult = await executeLlmRequest({
     provider: config.provider,
     model: config.model,
     apiKey: config.apiKey,
     messages,
-    temperature: 0.2,
+    temperature: 0.1,
     jsonMode: true
   });
 
-  const parsed = safeParseJson(rawResult);
+  let parsed = safeParseJson(rawResult);
+
+  // Auto-Repair Attempt (Phase 14): If response was invalid, perform 1 repair attempt
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.html !== 'string' || !parsed.html.trim()) {
+    console.warn('[Qursor++ LLM] Initial response was invalid JSON schema. Attempting 1 repair request...');
+    try {
+      const repairRaw = await executeLlmRequest({
+        provider: config.provider,
+        model: config.model,
+        apiKey: config.apiKey,
+        messages: [
+          { role: 'system', content: 'Return ONLY valid JSON with keys: "html" (string), "css" (string), "changes" (array of strings). Do not include markdown.' },
+          { role: 'user', content: `Please convert this output into valid JSON for the instruction "${instruction}":\n${rawResult}` }
+        ],
+        temperature: 0.0,
+        jsonMode: true
+      });
+      parsed = safeParseJson(repairRaw);
+    } catch (repairErr) {
+      console.warn('[Qursor++ LLM] Repair attempt failed:', repairErr);
+    }
+  }
 
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('LLM returned an invalid response format. The previous component has been preserved.');
@@ -378,7 +417,7 @@ Return the updated component as strict JSON:
   return {
     html: parsed.html.trim(),
     css: typeof parsed.css === 'string' ? parsed.css.trim() : '',
-    changes: Array.isArray(parsed.changes) ? parsed.changes : ['Applied user style modifications']
+    changes: Array.isArray(parsed.changes) ? parsed.changes : ['Applied user modifications']
   };
 }
 

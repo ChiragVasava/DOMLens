@@ -41,7 +41,7 @@ export function buildLivePreviewDoc(html, css, options = {}) {
     safeHtml = `<ul style="margin:0;padding:0 0 0 20px;list-style:disc;">${safeHtml}</ul>`;
   }
 
-  const widthStyle = targetWidth ? `width:${targetWidth}px;max-width:100%;` : 'width:max-content;max-width:100%;';
+  const widthStyle = targetWidth ? `width:${targetWidth}px;` : 'width:max-content;';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -68,15 +68,17 @@ export function buildLivePreviewDoc(html, css, options = {}) {
       display: flex;
       justify-content: center;
       align-items: flex-start;
+      overflow: auto;
     }
     
-    /* ── Zoom Transform Wrap ── */
+    /* ── Component Canvas Anchor & Zoom ── */
     #preview-root {
       ${widthStyle}
       transform: scale(${zoom});
       transform-origin: top center;
       transition: transform 0.1s ease-out;
       box-sizing: border-box;
+      margin: 0 auto;
     }
 
     /* ── Component Scoped CSS ── */

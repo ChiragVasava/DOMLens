@@ -33,6 +33,8 @@ export class ComponentState {
     };
 
     this.preview = {
+      width: null,
+      height: null,
       zoom: null // null = auto-fit, number = explicit scale (e.g. 1.0)
     };
 
@@ -120,6 +122,10 @@ export class ComponentState {
       status: 'idle'
     };
 
+    const w = elementData?.widthPx || (element?.getBoundingClientRect ? Math.round(element.getBoundingClientRect().width) : 400);
+    const h = elementData?.heightPx || (element?.getBoundingClientRect ? Math.round(element.getBoundingClientRect().height) : 300);
+    this.preview.width = w;
+    this.preview.height = h;
     this.preview.zoom = null;
     this.editState = {
       instruction: '',
