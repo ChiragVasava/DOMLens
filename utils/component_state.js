@@ -4,6 +4,10 @@
  * Serves as the authoritative single source of truth for the inspected component.
  * Synchronizes state across Live Preview, Overview, Typography, Colors, Layout,
  * Code generation, Edit (LLM modifications), and Assets.
+ * 
+ * Critical Architecture Rule:
+ * `current.html` + `current.css` are the single source of truth.
+ * Every feature (Live Preview, Code, Edit, React+Tailwind) consumes them.
  */
 
 export class ComponentState {
@@ -12,6 +16,7 @@ export class ComponentState {
       html: '',
       css: '',
       elementData: null,
+      metadata: {},
       styles: {},
       assets: []
     };
@@ -22,12 +27,19 @@ export class ComponentState {
       changes: []
     };
 
+    this.react = {
+      code: '',
+      status: 'idle' // 'idle' | 'generating' | 'ready' | 'error'
+    };
+
+    this.preview = {
+      zoom: null // null = auto-fit, number = explicit scale (e.g. 1.0)
+    };
+
     this.selectedElement = null;
     this.theme = 'dark'; // 'light' | 'dark' | 'system'
-    this.zoom = null;     // null = auto-fit, number = explicit scale (e.g. 1.0)
     this.activeTab = 'live';
-    this.codeScope = 'Selected'; // 'Selected' | 'Full Page'
-    this.codeFormat = 'html+css';   // 'html+css' | 'react'
+    this.codeFormat = 'html+css'; // 'html+css' | 'react'
     this.assetFilter = 'All';
 
     this.editState = {
@@ -38,6 +50,14 @@ export class ComponentState {
     };
 
     this._listeners = new Set();
+  }
+
+  get currentHtml() {
+    return this.current.html;
+  }
+
+  get currentCss() {
+    return this.current.css;
   }
 
   /**
@@ -76,21 +96,31 @@ export class ComponentState {
    */
   setElement(element, elementData, html, css, assets = []) {
     this.selectedElement = element;
+    const cleanHtml = (html || '').trim();
+    const cleanCss = (css || '').trim();
+
     this.original = {
-      html: html || '',
-      css: css || '',
+      html: cleanHtml,
+      css: cleanCss,
       elementData: elementData || null,
+      metadata: elementData?.general || {},
       styles: (elementData && elementData.styles) ? elementData.styles : {},
       assets: Array.isArray(assets) ? assets : []
     };
 
+    // current.html + current.css are initialized from original
     this.current = {
-      html: html || '',
-      css: css || '',
+      html: cleanHtml,
+      css: cleanCss,
       changes: []
     };
 
-    this.zoom = null;
+    this.react = {
+      code: '',
+      status: 'idle'
+    };
+
+    this.preview.zoom = null;
     this.editState = {
       instruction: '',
       isApplying: false,
@@ -103,19 +133,36 @@ export class ComponentState {
 
   /**
    * Updates the current component representation (e.g. after LLM edit)
+   * Invalidates any cached/previous React code so it regenerates from updated HTML+CSS.
    * @param {string} html 
    * @param {string} css 
    * @param {Array<string>} [changes] 
    */
   updateCurrent(html, css, changes = []) {
-    if (typeof html === 'string') this.current.html = html;
-    if (typeof css === 'string') this.current.css = css;
+    if (typeof html === 'string') this.current.html = html.trim();
+    if (typeof css === 'string') this.current.css = css.trim();
     if (Array.isArray(changes)) {
       this.current.changes = changes;
       this.editState.changes = changes;
     }
     this.editState.error = null;
+
+    // React code MUST invalidate on edit so stale React code is never shown
+    this.react.code = '';
+    this.react.status = 'idle';
+
     this.notify('current_updated');
+  }
+
+  /**
+   * Updates React generation status and code
+   * @param {string} code 
+   * @param {string} status ('idle' | 'generating' | 'ready' | 'error')
+   */
+  setReactCode(code, status = 'ready') {
+    this.react.code = code || '';
+    this.react.status = status;
+    this.notify('react_updated');
   }
 
   /**
@@ -125,6 +172,8 @@ export class ComponentState {
     this.current.html = this.original.html;
     this.current.css = this.original.css;
     this.current.changes = [];
+    this.react.code = '';
+    this.react.status = 'idle';
     this.editState = {
       instruction: '',
       isApplying: false,
@@ -150,8 +199,16 @@ export class ComponentState {
    * @param {number|null} zoom
    */
   setZoom(zoom) {
-    this.zoom = zoom;
+    this.preview.zoom = zoom;
     this.notify('zoom_changed');
+  }
+
+  get zoom() {
+    return this.preview.zoom;
+  }
+
+  set zoom(val) {
+    this.preview.zoom = val;
   }
 
   /**
@@ -173,17 +230,6 @@ export class ComponentState {
     if (this.codeFormat !== format) {
       this.codeFormat = format;
       this.notify('code_format_changed');
-    }
-  }
-
-  /**
-   * Updates code scope
-   * @param {string} scope ('Selected' | 'Full Page')
-   */
-  setCodeScope(scope) {
-    if (this.codeScope !== scope) {
-      this.codeScope = scope;
-      this.notify('code_scope_changed');
     }
   }
 

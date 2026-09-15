@@ -114,23 +114,23 @@ const POLYMER_ATTRS = [
 // ─────────────────────────────────────────────────────────────────
 // Main dispatcher
 // ─────────────────────────────────────────────────────────────────
-export function generateComponentCode(data, format = CODE_FORMATS.HTML_CSS) {
-  if (!data) return '';
+export function generateComponentCode(data, format = CODE_FORMATS.HTML_CSS, currentHtml = null, currentCss = null) {
+  if (!data && !currentHtml) return '';
 
-  const rawHtml   = data.general ? data.general.fullOuterHTML : (data.outerHTML || '');
-  const tag       = (data.tag || 'DIV').toLowerCase();
-  const styles    = data.styles || {};
-  const rawCss    = data.rawCss || '';
+  const rawHtml   = currentHtml || (data?.general ? data.general.fullOuterHTML : (data?.outerHTML || ''));
+  const rawCss    = currentCss !== null ? currentCss : (data?.rawCss || '');
+  const tag       = (data?.tag || 'DIV').toLowerCase();
+  const styles    = data?.styles || {};
   const componentName = sanitizeComponentName(
-    data.general ? data.general.id : null,
-    data.classes,
+    data?.general ? data.general.id : null,
+    data?.classes,
     tag
   );
   const tailwindClasses = mapStylesToTailwind(styles, tag);
 
   const fmt = (format || '').toLowerCase();
   if (fmt === 'react' || fmt === CODE_FORMATS.REACT) {
-    return generateReactTailwind(rawHtml, componentName, styles, tailwindClasses, data);
+    return generateReactTailwind(rawHtml, componentName, styles, tailwindClasses, data || { tag, selector: '' });
   }
 
   // HTML + CSS format

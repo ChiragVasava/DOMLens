@@ -32,6 +32,10 @@ export function extractElementData(element) {
   const role = explicitRole || implicitRole || 'N/A';
   const accessibleName = extractAccessibleName(element);
 
+  // Dedicated Component HTML & CSS Extraction
+  const componentHtml = extractComponentHTML(element);
+  const componentCss = extractComponentCSS(element) || rawCss;
+
   // General Attributes & Properties
   const general = {
     tagName: tag.toUpperCase(),
@@ -40,7 +44,7 @@ export function extractElementData(element) {
     textContent: getCleanTextContent(element, 300),
     innerHTML: element.innerHTML ? (element.innerHTML.length > 500 ? element.innerHTML.substring(0, 500) + '...' : element.innerHTML) : '',
     outerHTML: element.outerHTML ? (element.outerHTML.length > 500 ? element.outerHTML.substring(0, 500) + '...' : element.outerHTML) : '',
-    fullOuterHTML: element.outerHTML || '',
+    fullOuterHTML: componentHtml || element.outerHTML || '',
     value: element.value !== undefined ? String(element.value) : 'N/A',
     name: element.getAttribute('name') || 'N/A',
     type: element.getAttribute('type') || 'N/A',
@@ -79,12 +83,185 @@ export function extractElementData(element) {
     border: styles.border,
     flexGrid: styles.flexGrid,
     specialDetails,
-    rawCss,
+    rawCss: componentCss,
+    componentHtml,
+    componentCss,
     pageStyles,
     baseUrl: window.location.href,
     widthPx: Math.round(rect.width),
     heightPx: Math.round(rect.height)
   };
+}
+
+/**
+ * Extracts clean, isolated component HTML with absolute URLs and form value preservation
+ * @param {Element} element
+ * @returns {string}
+ */
+export function extractComponentHTML(element) {
+  if (!(element instanceof Element)) return '';
+
+  const clone = element.cloneNode(true);
+
+  // Remove internal inspector elements if present
+  clone.querySelectorAll('#website-inspector-root, .website-inspector-box').forEach(el => el.remove());
+
+  // Resolve relative URLs for images, media, links
+  const base = document.baseURI || window.location.href;
+
+  clone.querySelectorAll('img').forEach(img => {
+    const src = img.getAttribute('src');
+    if (src) {
+      try {
+        img.setAttribute('src', new URL(src, base).href);
+      } catch (e) {}
+    }
+    const srcset = img.getAttribute('srcset');
+    if (srcset) {
+      try {
+        const resolved = srcset.split(',').map(part => {
+          const trimmed = part.trim();
+          const [url, descriptor] = trimmed.split(/\s+/);
+          if (url) {
+            const abs = new URL(url, base).href;
+            return descriptor ? `${abs} ${descriptor}` : abs;
+          }
+          return part;
+        }).join(', ');
+        img.setAttribute('srcset', resolved);
+      } catch (e) {}
+    }
+  });
+
+  clone.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+      try {
+        a.setAttribute('href', new URL(href, base).href);
+      } catch (e) {}
+    }
+  });
+
+  clone.querySelectorAll('source, video, audio').forEach(media => {
+    const src = media.getAttribute('src');
+    if (src) {
+      try {
+        media.setAttribute('src', new URL(src, base).href);
+      } catch (e) {}
+    }
+  });
+
+  // Preserve form input values and states
+  const origInputs = element.querySelectorAll('input, textarea, select');
+  const cloneInputs = clone.querySelectorAll('input, textarea, select');
+  origInputs.forEach((orig, idx) => {
+    const cl = cloneInputs[idx];
+    if (!cl) return;
+    if (orig.tagName === 'TEXTAREA') {
+      cl.textContent = orig.value;
+    } else if (orig.type === 'checkbox' || orig.type === 'radio') {
+      if (orig.checked) cl.setAttribute('checked', '');
+      else cl.removeAttribute('checked');
+    } else if (orig.value !== undefined) {
+      cl.setAttribute('value', orig.value);
+    }
+  });
+
+  // Ensure SVGs have proper xmlns attribute
+  if (clone.tagName.toLowerCase() === 'svg' && !clone.getAttribute('xmlns')) {
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  }
+  clone.querySelectorAll('svg').forEach(svg => {
+    if (!svg.getAttribute('xmlns')) {
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+  });
+
+  return clone.outerHTML || '';
+}
+
+/**
+ * Extracts self-contained, scoped CSS required to visually reproduce the component in isolation
+ * @param {Element} element
+ * @returns {string} Scoped CSS declarations block
+ */
+export function extractComponentCSS(element) {
+  if (!(element instanceof Element)) return '';
+
+  const rules = [];
+
+  function buildDeclarations(el, isRoot = false) {
+    const cs = window.getComputedStyle(el);
+    const props = [
+      'display', 'position', 'box-sizing',
+      'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+      'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+      'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+      'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
+      'color', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
+      'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+      'border-radius', 'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
+      'box-shadow', 'opacity', 'overflow', 'cursor', 'z-index',
+      'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'align-self', 'gap', 'row-gap', 'column-gap',
+      'grid-template-columns', 'grid-template-rows', 'grid-column', 'grid-row'
+    ];
+
+    const lines = [];
+    for (const prop of props) {
+      const val = cs.getPropertyValue(prop);
+      if (!val) continue;
+      if (val === 'none' && (prop === 'background-image' || prop === 'box-shadow' || prop === 'text-decoration')) continue;
+      if (val === 'auto' && (prop === 'z-index' || prop === 'width' || prop === 'height') && !isRoot) continue;
+      if (val === 'normal' && (prop === 'line-height' || prop === 'letter-spacing' || prop === 'gap')) continue;
+      if (val === '0px' && (prop.startsWith('margin') || prop.startsWith('padding') || prop.startsWith('border-radius'))) continue;
+      if (val === 'rgba(0, 0, 0, 0)' && (prop === 'background-color' || prop.includes('color'))) continue;
+      if (val === '0px none rgb(0, 0, 0)' || val === '0px none rgb(255, 255, 255)') continue;
+
+      lines.push(`  ${prop}: ${val};`);
+    }
+    return lines.join('\n');
+  }
+
+  // 1. Root element styles
+  const rootTag = element.tagName.toLowerCase();
+  const rootId = element.id ? `#${element.id}` : '';
+  const rootClass = element.classList.length ? `.${Array.from(element.classList).join('.')}` : '';
+  const rootSelector = rootId || (rootClass ? `${rootTag}${rootClass}` : rootTag);
+
+  const rootDecls = buildDeclarations(element, true);
+  if (rootDecls) {
+    rules.push(`/* Root: <${rootTag}> */\n${rootSelector} {\n${rootDecls}\n}`);
+  }
+
+  // 2. Descendants (up to 50 elements)
+  const descendants = Array.from(element.querySelectorAll('*')).slice(0, 50);
+  const seenSelectors = new Set();
+  seenSelectors.add(rootSelector);
+
+  for (const child of descendants) {
+    const cTag = child.tagName.toLowerCase();
+    const cId = child.id ? `#${child.id}` : '';
+    const cClasses = Array.from(child.classList).filter(c => !c.startsWith('website-inspector'));
+    let cSel = '';
+
+    if (cId) {
+      cSel = cId;
+    } else if (cClasses.length) {
+      cSel = `${rootSelector} .${cClasses[0]}`;
+    } else {
+      cSel = `${rootSelector} ${cTag}`;
+    }
+
+    if (seenSelectors.has(cSel)) continue;
+    seenSelectors.add(cSel);
+
+    const decls = buildDeclarations(child, false);
+    if (decls) {
+      rules.push(`${cSel} {\n${decls}\n}`);
+    }
+  }
+
+  return rules.join('\n\n');
 }
 
 /**

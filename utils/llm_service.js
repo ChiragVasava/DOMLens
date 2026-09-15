@@ -14,13 +14,46 @@ export const LLM_PROVIDERS = {
 };
 
 export const DEFAULT_MODELS = {
-  [LLM_PROVIDERS.GEMINI]: 'gemini-1.5-flash',
+  [LLM_PROVIDERS.GEMINI]: 'gemini-2.0-flash',
   [LLM_PROVIDERS.OPENAI]: 'gpt-4o-mini',
   [LLM_PROVIDERS.OPENROUTER]: 'google/gemini-2.0-flash-001',
   [LLM_PROVIDERS.GROQ]: 'llama-3.3-70b-versatile'
 };
 
+export const VERIFIED_GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.5-flash',
+  'gemini-1.5-pro-latest'
+];
+
 const REQUEST_TIMEOUT_MS = 35000;
+
+/**
+ * Discovers available Gemini models supporting generateContent using the user's API key
+ * @param {string} apiKey
+ * @returns {Promise<string[]>} List of model names
+ */
+export async function discoverGeminiModels(apiKey) {
+  if (!apiKey) return VERIFIED_GEMINI_MODELS;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`, {
+      method: 'GET'
+    });
+    if (!res.ok) return VERIFIED_GEMINI_MODELS;
+    const data = await res.json();
+    if (Array.isArray(data.models)) {
+      const valid = data.models
+        .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''))
+        .filter(name => name.includes('flash') || name.includes('pro'));
+      if (valid.length > 0) return valid;
+    }
+  } catch (e) {
+    console.warn('[Qursor++ LLM] Model discovery failed, using verified fallback list:', e);
+  }
+  return VERIFIED_GEMINI_MODELS;
+}
 
 /**
  * Auto-detects provider based on the format of the API key
@@ -59,7 +92,11 @@ export async function getLlmConfig() {
     chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], (res) => {
       const apiKey = (res.qursor_api_key || '').trim();
       const provider = res.qursor_llm_provider || detectProvider(apiKey);
-      const model = res.qursor_llm_model || DEFAULT_MODELS[provider] || 'gemini-1.5-flash';
+      let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || 'gemini-2.0-flash';
+      // If user had the obsolete gemini-1.5-flash stored, upgrade it to gemini-2.0-flash
+      if (model === 'gemini-1.5-flash') {
+        model = 'gemini-2.0-flash';
+      }
       resolve({
         apiKey,
         provider,
@@ -80,7 +117,10 @@ export async function getLlmConfig() {
 export async function saveLlmConfig(apiKey, provider = null, model = null) {
   const cleanKey = (apiKey || '').trim();
   const resolvedProvider = provider || detectProvider(cleanKey);
-  const resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || 'gemini-1.5-flash';
+  let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || 'gemini-2.0-flash';
+  if (resolvedModel === 'gemini-1.5-flash') {
+    resolvedModel = 'gemini-2.0-flash';
+  }
 
   return new Promise((resolve) => {
     chrome.storage.sync.set({

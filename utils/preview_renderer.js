@@ -90,3 +90,5 @@ export function buildLivePreviewDoc(html, css, options = {}) {
 </body>
 </html>`;
 }
+
+export const renderComponentPreview = buildLivePreviewDoc;

@@ -787,7 +787,7 @@ export class InspectorPanel {
         let ext = 'html';
 
         if (format === CODE_FORMATS.REACT) {
-          content = this.cachedAiReact || generateComponentCode(this.state.original.elementData, CODE_FORMATS.REACT);
+          content = this.cachedAiReact || generateComponentCode(this.state.original.elementData, CODE_FORMATS.REACT, this.state.current.html, this.state.current.css);
           ext = 'jsx';
         } else {
           const css = (this.state.current.css || this.state.original.css || '').trim();
@@ -939,8 +939,8 @@ export class InspectorPanel {
     this.targetElement = element;
     if (!data) return;
 
-    const html = data.general?.fullOuterHTML || element?.outerHTML || '';
-    const css = data.rawCss || '';
+    const html = data.componentHtml || data.general?.fullOuterHTML || element?.outerHTML || '';
+    const css = data.componentCss || data.rawCss || '';
     const assets = extractElementAssets(element || document.body);
 
     this.state.setElement(element, data, html, css, assets);
@@ -1239,7 +1239,7 @@ export class InspectorPanel {
 
         let codeOutput = '';
         if (fmt === CODE_FORMATS.REACT) {
-          codeOutput = this.cachedAiReact || generateComponentCode(d, CODE_FORMATS.REACT);
+          codeOutput = this.cachedAiReact || generateComponentCode(d, CODE_FORMATS.REACT, this.state.current.html, this.state.current.css);
         } else {
           const css = (this.state.current.css || this.state.original.css || '').trim();
           codeOutput = css
@@ -1415,7 +1415,7 @@ export class InspectorPanel {
               <div class="prop-row">
                 <span class="prop-label">Model:</span>
                 <input type="text" id="settingsModelInput" class="q-input" 
-                       value="${_esc(this.llmConfig.model || DEFAULT_MODELS[this.llmConfig.provider] || 'gemini-1.5-flash')}" />
+                       value="${_esc(this.llmConfig.model || DEFAULT_MODELS[this.llmConfig.provider] || 'gemini-2.0-flash')}" />
               </div>
             </div>
 
