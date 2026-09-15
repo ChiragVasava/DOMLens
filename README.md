@@ -10,7 +10,7 @@ Qursor++ is a lightweight, high-precision Chrome Extension (Manifest V3) that al
 
 ## 🚀 9 Ordered Navigation Tabs
 
-- 👁️ **1. Live Preview**: Isolated iframe rendering with **Canvas Background Isolation** (`#000000` Dark vs `#FFFFFF` Light preserving component backgrounds) and zoom controls (`-`, `Fit`, `100%`, `+`).
+- 👁️ **1. Live Preview**: Isolated iframe rendering with **Canvas Background Isolation** (`#000000` Dark vs `#FFFFFF` Light preserving component backgrounds), zoom controls (`-`, `Fit`, `100%`, `+`), and true intrinsic dimension preservation.
 - ⓘ **2. Overview**: Element tag, dimensions, unique CSS selector, DOM depth level, and quick action buttons.
 - 🔤 **3. Typography**: Font family, font size, weight, line-height, letter-spacing, and text alignment.
 - 🎨 **4. Colors**: Text color, background color, border color, and visual color swatch pills.
@@ -18,7 +18,40 @@ Qursor++ is a lightweight, high-precision Chrome Extension (Manifest V3) that al
 - 📄 **6. Code**: Component synthesizer with strictly two options: **HTML+CSS** and **React** (Tailwind JSX with Web Component sanitization), plus 1-click AI generation.
 - 💬 **7. Edit**: Natural language LLM component editor with instruction prompt textarea, Apply, and Reset rollback.
 - 🖼️ **8. Assets**: Deep DOM subtree media scanner (YouTube thumbnails, `<img>`, `srcset`, inline SVGs, CSS backgrounds, `<video>`) with format filter pills (`All`, `Images`, `SVG`, `PNG`, `JPG`, `WEBP`, `GIF`, `Other`).
-- ⚙️ **9. Settings**: Multi-provider AI configuration (Google Gemini, OpenAI, OpenRouter, Groq) with masked API key storage and theme switcher.
+- ⚙️ **9. Settings**: Multi-provider AI configuration (`gemini-3.8-flash` default, OpenAI, OpenRouter, Groq) with masked API key storage and theme switcher.
+
+---
+
+## 🏛️ Component Architecture: Single Source of Truth
+
+```text
+USER SELECTS ELEMENT
+        ↓
+EXTRACT HTML + CSS + ASSETS
+        ↓
+CENTRAL COMPONENT STATE
+   ├── original (Immutable: HTML + CSS + Assets + Telemetry)
+   └── current (Authoritative: HTML + CSS)
+        ↓
+   ┌────┴───────────────────────────┐
+   ▼                                ▼
+LIVE PREVIEW                    CODE / REACT
+(Isolated Iframe Canvas)        (Tailwind JSX Synthesizer)
+   │                                ▲
+   ▼                                │
+USER EDITS WITH PROMPT              │
+   ↓                                │
+GEMINI API (gemini-3.8-flash)       │
+Structured JSON: { html, css, changes }
+   ↓                                │
+UPDATE CURRENT STATE ───────────────┘
+(Live Preview re-renders, React regenerates)
+```
+
+- **Clean Structural CSS Extraction**: Child styles are mapped via exact `:nth-child` structural paths (`${rootSelector} > ${relPath}`) eliminating selector collision and sibling omission.
+- **Normalized Root Positioning**: Page-level offsets (`top/left/right/bottom` and external margins) are normalized to `position: relative !important; margin: 0 auto !important;` so components never fly off the canvas.
+- **Pointer-Capture Dragging**: Panel header uses `setPointerCapture` and dynamic iframe shielding during drag, eliminating cursor sticking.
+- **Configured Gemini Flash Model**: Defaults to `gemini-3.8-flash` with structured output schemas (`generationConfig.responseSchema`) and automatic retry on malformed JSON.
 
 ---
 
