@@ -158,71 +158,85 @@ export async function clearLlmConfig() {
 // ─────────────────────────────────────────────────────────────────
 
 async function executeLlmRequest({ provider, model, apiKey, messages, temperature = 0.2, jsonMode = false }) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const MAX_RETRIES = 3;
+  let attempt = 0;
 
-  try {
-    if (provider === LLM_PROVIDERS.GEMINI) {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const systemMsg = messages.find(m => m.role === 'system')?.content || '';
-      const userMsg = messages.find(m => m.role === 'user')?.content || '';
-      const combinedText = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
+  while (attempt <= MAX_RETRIES) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-      const bodyPayload = {
-        contents: [{ parts: [{ text: combinedText }] }],
-        generationConfig: {
-          temperature,
-          maxOutputTokens: 8192
-        }
-      };
+    try {
+      if (provider === LLM_PROVIDERS.GEMINI) {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+        const userMsg = messages.find(m => m.role === 'user')?.content || '';
+        const combinedText = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
 
-      if (jsonMode) {
-        bodyPayload.generationConfig.responseMimeType = 'application/json';
-        bodyPayload.generationConfig.responseSchema = {
-          type: 'OBJECT',
-          properties: {
-            html: { type: 'STRING' },
-            css: { type: 'STRING' },
-            changes: {
-              type: 'ARRAY',
-              items: { type: 'STRING' }
-            }
-          },
-          required: ['html', 'css', 'changes']
+        const bodyPayload = {
+          contents: [{ parts: [{ text: combinedText }] }],
+          generationConfig: {
+            temperature,
+            maxOutputTokens: 8192
+          }
         };
-      }
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload),
-        signal: controller.signal
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const code = res.status;
-        const detail = errData.error?.message || res.statusText || 'Unknown error';
-
-        if (code === 404) {
-          throw new Error(`Configured Gemini model (${model}) is unavailable. Please select a supported model in Settings.`);
-        } else if (code === 401 || code === 403) {
-          throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
-        } else if (code === 429) {
-          throw new Error('Gemini API rate limit exceeded (429). Please wait a moment before trying again.');
-        } else if (code === 503 || code === 500) {
-          throw new Error(`Gemini server temporarily unavailable (${code}). Server busy or no model capacity. Please retry shortly.`);
-        } else if (code === 400) {
-          throw new Error(`Gemini API bad request (400): ${detail}`);
-        } else {
-          throw new Error(`Gemini API Error (${code}): ${detail}`);
+        if (jsonMode) {
+          bodyPayload.generationConfig.responseMimeType = 'application/json';
+          bodyPayload.generationConfig.responseSchema = {
+            type: 'OBJECT',
+            properties: {
+              html: { type: 'STRING' },
+              css: { type: 'STRING' },
+              changes: {
+                type: 'ARRAY',
+                items: { type: 'STRING' }
+              }
+            },
+            required: ['html', 'css', 'changes']
+          };
         }
-      }
 
-      const data = await res.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) throw new Error('Received empty response from Gemini API.');
-      return rawText.trim();
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload),
+          signal: controller.signal
+        });
+
+        // Exponential backoff for 503 (server capacity) and 429 (rate limit)
+        if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES) {
+          attempt++;
+          const backoffDelay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+          console.warn(`[Qursor++ LLM] Gemini server returned ${res.status}. Retrying in ${backoffDelay}ms (attempt ${attempt}/${MAX_RETRIES})...`);
+          clearTimeout(timeoutId);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          continue;
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const code = res.status;
+          const detail = errData.error?.message || res.statusText || 'Unknown error';
+
+          if (code === 404) {
+            throw new Error(`Configured Gemini model (${model}) is unavailable. Please select a supported model in Settings.`);
+          } else if (code === 401 || code === 403) {
+            throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
+          } else if (code === 429) {
+            throw new Error('Gemini API rate limit exceeded (429). Please wait a moment before trying again.');
+          } else if (code === 503 || code === 500) {
+            throw new Error('Gemini is temporarily unavailable. Your previous component was preserved.');
+          } else if (code === 400) {
+            throw new Error(`Gemini API bad request (400): ${detail}`);
+          } else {
+            throw new Error(`Gemini API Error (${code}): ${detail}`);
+          }
+        }
+
+        const data = await res.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error('Received empty response from Gemini API.');
+        return rawText.trim();
 
     } else {
       // OpenAI, OpenRouter, Groq
@@ -282,35 +296,96 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
   } finally {
     clearTimeout(timeoutId);
   }
+    attempt++;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Helper: Safe JSON Parser with Code-Fence Stripping & Robust Extraction
 // ─────────────────────────────────────────────────────────────────
 
-function safeParseJson(rawText) {
+function sanitizeJsonString(str) {
+  let inString = false;
+  let escaped = false;
+  let out = '';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '"' && !escaped) {
+      inString = !inString;
+      out += char;
+    } else if (inString) {
+      if (char === '\n') {
+        out += '\\n';
+      } else if (char === '\r') {
+        out += '\\r';
+      } else if (char === '\t') {
+        out += '\\t';
+      } else {
+        out += char;
+      }
+    } else {
+      out += char;
+    }
+    escaped = (char === '\\' && !escaped);
+  }
+  return out;
+}
+
+function normalizeParsedSchema(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj.result && typeof obj.result === 'object' && typeof obj.result.html === 'string') {
+    return normalizeParsedSchema(obj.result);
+  }
+  if (obj.data && typeof obj.data === 'object' && typeof obj.data.html === 'string') {
+    return normalizeParsedSchema(obj.data);
+  }
+  return obj;
+}
+
+export function safeParseJson(rawText) {
   if (!rawText) return null;
+
   // 1. Direct parse attempt
   try {
-    return JSON.parse(rawText);
+    const obj = JSON.parse(rawText);
+    return normalizeParsedSchema(obj);
   } catch (e) {}
 
   // 2. Strip markdown code fences ```json ... ``` or ``` ... ```
   const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenceMatch && fenceMatch[1]) {
     try {
-      return JSON.parse(fenceMatch[1].trim());
-    } catch (e) {}
+      const obj = JSON.parse(fenceMatch[1].trim());
+      return normalizeParsedSchema(obj);
+    } catch (e) {
+      try {
+        const obj = JSON.parse(sanitizeJsonString(fenceMatch[1].trim()));
+        return normalizeParsedSchema(obj);
+      } catch (e2) {}
+    }
   }
 
   // 3. Find outermost { and }
   const firstBrace = rawText.indexOf('{');
   const lastBrace = rawText.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
-    const candidate = rawText.substring(firstBrace, lastBrace + 1);
+    let candidate = rawText.substring(firstBrace, lastBrace + 1);
     try {
-      return JSON.parse(candidate);
-    } catch (e) {}
+      const obj = JSON.parse(candidate);
+      return normalizeParsedSchema(obj);
+    } catch (e) {
+      try {
+        const sanitized = sanitizeJsonString(candidate);
+        const obj = JSON.parse(sanitized);
+        return normalizeParsedSchema(obj);
+      } catch (e2) {
+        try {
+          const noTrailing = candidate.replace(/,\s*([}\]])/g, '$1');
+          const obj = JSON.parse(sanitizeJsonString(noTrailing));
+          return normalizeParsedSchema(obj);
+        } catch (e3) {}
+      }
+    }
   }
 
   return null;
@@ -346,7 +421,7 @@ CRITICAL EDIT PRINCIPLES:
 2. PRESERVE EVERYTHING that the user did not explicitly request to change.
 3. Modify ONLY what is necessary to satisfy the user's instruction.
 4. DO NOT change dimensions, typography, spacing, layout, colors, assets, or structure unless the user's instruction requires it.
-5. Example: If the user says 'Change Sunita Williams to Einstein Williams', change ONLY that text and keep all other text, fonts, images, sizes, and colors 100% untouched.
+5. If the user instruction only changes text, DO NOT change any CSS rules.
 6. Return your response as a strict JSON object matching this schema:
    {
      "html": "<complete updated HTML>",
@@ -357,12 +432,15 @@ CRITICAL EDIT PRINCIPLES:
 8. No markdown code blocks outside JSON. No explanatory preamble.`;
 
   const tag = elementData?.tag || 'element';
+  // Context optimization (Section 8): Do not send giant stylesheets that overflow token limits
+  const safeCss = currentCss.length > 8000 ? currentCss.substring(0, 8000) + '\n/* ... truncated remaining rules ... */' : currentCss;
+
   const userPrompt = `Target Component: <${tag}>
 Current Component HTML:
 ${currentHtml}
 
 Current Component CSS:
-${currentCss || '/* none */'}
+${safeCss || '/* none */'}
 
 User Instruction:
 "${instruction}"
@@ -414,9 +492,18 @@ Return the complete updated component JSON:`;
     throw new Error('LLM response was missing valid HTML markup. The previous component has been preserved.');
   }
 
+  // Diff-based Safety (Section 10 & 11):
+  // If the instruction only asked to change text, keep existing CSS byte-for-byte
+  const lower = instruction.toLowerCase();
+  const isStyleEdit = ['background', 'bg', 'color', 'padding', 'margin', 'border', 'font', 'size', 'width', 'height', 'radius', 'shadow', 'display'].some(k => lower.includes(k));
+  let finalCss = typeof parsed.css === 'string' ? parsed.css.trim() : '';
+  if (!isStyleEdit && currentCss) {
+    finalCss = currentCss;
+  }
+
   return {
     html: parsed.html.trim(),
-    css: typeof parsed.css === 'string' ? parsed.css.trim() : '',
+    css: finalCss,
     changes: Array.isArray(parsed.changes) ? parsed.changes : ['Applied user modifications']
   };
 }

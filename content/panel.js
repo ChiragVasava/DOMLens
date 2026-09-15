@@ -21,6 +21,7 @@ import { generateComponentCode, CODE_FORMATS } from '../utils/component_generato
 import { extractElementAssets, filterAssets } from '../utils/asset_extractor.js';
 import { ComponentState } from '../utils/component_state.js';
 import { buildLivePreviewDoc } from '../utils/preview_renderer.js';
+import { detectSimpleTextEdit } from '../utils/text_editor.js';
 import {
   callLlmEditComponent,
   callLlmGenerateReact,
@@ -875,6 +876,16 @@ export class InspectorPanel {
       return;
     }
 
+    // Fast-path: Deterministic text edit check (Section 19 compliance)
+    // Avoids unnecessary API latency, eliminates 503 errors, and guarantees 100% CSS preservation
+    const simpleEdit = detectSimpleTextEdit(instruction, this.state.current.html);
+    if (simpleEdit) {
+      this.state.updateCurrent(simpleEdit.html, this.state.current.css, simpleEdit.changes);
+      this.toastManager.show('✓ Text updated instantly!', 'success');
+      this.renderTabContent();
+      return;
+    }
+
     const applyBtn = this.panelContainer.querySelector('#applyEditBtn');
     if (applyBtn) {
       applyBtn.disabled = true;
@@ -903,7 +914,8 @@ export class InspectorPanel {
       console.error('[Qursor++ Edit Error]:', err);
       // NEVER corrupt the existing component on failure
       this.state.setEditState({ isApplying: false, error: err.message });
-      this.toastManager.show(`LLM failed: ${err.message}`, 'error');
+      const toastMsg = err.message.includes('temporarily unavailable') ? err.message : `LLM failed: ${err.message}`;
+      this.toastManager.show(toastMsg, 'error');
       this.renderTabContent();
     }
   }
@@ -1060,26 +1072,32 @@ export class InspectorPanel {
         `;
 
         // Render preview with authoritative current HTML + current CSS and Canvas Theme Isolation
+        const compBg = this.state.original.elementData?.effectiveBg || (this.state.original.elementData?.colorScheme === 'dark' ? '#0d1117' : '#ffffff');
+        const compFg = this.state.original.elementData?.effectiveColor || (this.state.original.elementData?.colorScheme === 'dark' ? '#e6edf3' : '#1f2328');
+        const compScheme = this.state.original.elementData?.colorScheme || 'dark';
+
         const previewHtml = buildLivePreviewDoc(
           this.state.current.html,
           this.state.current.css,
           {
-            theme: effectiveTheme,
+            effectiveBg: compBg,
+            effectiveColor: compFg,
+            colorScheme: compScheme,
+            effectiveFontFamily: this.state.original.elementData?.effectiveFontFamily,
+            pageStyles: this.state.original.elementData?.pageStyles,
             zoom: activeZoom,
             width: targetWidth,
             height: targetHeight
           }
         );
 
-        const canvasBg = effectiveTheme === THEMES.DARK ? '#000000' : '#FFFFFF';
-
         body.innerHTML = `
           <div class="section-label-row">
             <span>COMPONENT LIVE FRAME</span>
-            <span class="node-badge">${targetWidth}×${targetHeight}px • Canvas: ${effectiveTheme.toUpperCase()}</span>
+            <span class="node-badge">${targetWidth}×${targetHeight}px • Source: ${compScheme.toUpperCase()}</span>
           </div>
-          <div class="qursor-card" style="padding:4px;background:${canvasBg};border:1px solid var(--q-border);flex:1;min-height:280px;display:flex;">
-            <iframe id="livePreviewFrame" style="width:100%;flex:1;min-height:280px;border:none;border-radius:8px;background:${canvasBg};" srcdoc="${_escapeAttr(previewHtml)}"></iframe>
+          <div class="qursor-card" style="padding:4px;background:${compBg};border:1px solid var(--q-border);flex:1;min-height:280px;display:flex;">
+            <iframe id="livePreviewFrame" style="width:100%;flex:1;min-height:280px;border:none;border-radius:8px;background:${compBg};" srcdoc="${_escapeAttr(previewHtml)}"></iframe>
           </div>
           ${this.state.current.changes.length > 0 ? `
             <div class="alert-box success">

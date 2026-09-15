@@ -15,6 +15,98 @@ import { extractComputedStyles, getRawCssString } from '../utils/style.js';
  * @param {Element} element 
  * @returns {Object} Structured inspection payload
  */
+/**
+ * Traces the ancestor tree to find effective non-transparent background color,
+ * computed text color, font family, and color scheme classification.
+ * This guarantees the selected component preserves its original appearance
+ * regardless of whether Qursor++ extension UI is in Light or Dark mode.
+ * 
+ * @param {Element} element
+ * @returns {{ effectiveBg: string, effectiveColor: string, effectiveFontFamily: string, colorScheme: 'dark'|'light' }}
+ */
+export function getEffectiveElementColors(element) {
+  if (!(element instanceof Element)) {
+    return {
+      effectiveBg: 'rgb(255, 255, 255)',
+      effectiveColor: 'rgb(0, 0, 0)',
+      effectiveFontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+      colorScheme: 'light'
+    };
+  }
+
+  let curr = element;
+  let effectiveBg = '';
+  let effectiveColor = '';
+  let effectiveFontFamily = '';
+
+  try {
+    const cs = window.getComputedStyle(element);
+    effectiveColor = cs.getPropertyValue('color') || 'rgb(0, 0, 0)';
+    effectiveFontFamily = cs.getPropertyValue('font-family') || '-apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Walk up the DOM tree looking for the first non-transparent background
+    while (curr && curr !== document.documentElement) {
+      const c = window.getComputedStyle(curr);
+      const bg = c.getPropertyValue('background-color');
+      if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+        effectiveBg = bg;
+        break;
+      }
+      curr = curr.parentElement;
+    }
+
+    if (!effectiveBg || effectiveBg === 'transparent' || effectiveBg === 'rgba(0, 0, 0, 0)') {
+      const htmlCs = window.getComputedStyle(document.documentElement);
+      const htmlBg = htmlCs.getPropertyValue('background-color');
+      if (htmlBg && htmlBg !== 'transparent' && htmlBg !== 'rgba(0, 0, 0, 0)') {
+        effectiveBg = htmlBg;
+      } else if (document.body) {
+        const bodyCs = window.getComputedStyle(document.body);
+        const bodyBg = bodyCs.getPropertyValue('background-color');
+        if (bodyBg && bodyBg !== 'transparent' && bodyBg !== 'rgba(0, 0, 0, 0)') {
+          effectiveBg = bodyBg;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Qursor++ Extractor] Error resolving effective colors:', e);
+  }
+
+  // Fallback if the whole page is transparent
+  if (!effectiveBg || effectiveBg === 'transparent' || effectiveBg === 'rgba(0, 0, 0, 0)') {
+    const rgb = (effectiveColor || '').match(/\d+/g);
+    if (rgb && rgb.length >= 3) {
+      const lum = (0.299 * parseInt(rgb[0], 10) + 0.587 * parseInt(rgb[1], 10) + 0.114 * parseInt(rgb[2], 10)) / 255;
+      effectiveBg = lum > 0.5 ? 'rgb(13, 17, 23)' : 'rgb(255, 255, 255)';
+    } else {
+      effectiveBg = 'rgb(255, 255, 255)';
+    }
+  }
+
+  // Calculate luminance of effectiveBg to classify colorScheme
+  let isDark = false;
+  const bgMatch = effectiveBg.match(/\d+/g);
+  if (bgMatch && bgMatch.length >= 3) {
+    const r = parseInt(bgMatch[0], 10);
+    const g = parseInt(bgMatch[1], 10);
+    const b = parseInt(bgMatch[2], 10);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    isDark = lum < 0.5;
+  }
+
+  return {
+    effectiveBg,
+    effectiveColor,
+    effectiveFontFamily,
+    colorScheme: isDark ? 'dark' : 'light'
+  };
+}
+
+/**
+ * Collects complete detailed analysis for a target DOM element
+ * @param {Element} element 
+ * @returns {Object} Structured inspection payload
+ */
 export function extractElementData(element) {
   if (!(element instanceof Element)) return null;
 
@@ -25,6 +117,9 @@ export function extractElementData(element) {
   const styles = extractComputedStyles(element);
   const rawCss = getRawCssString(element);
 
+  // Effective visual colors & typography context from original page
+  const effectiveColors = getEffectiveElementColors(element);
+
   // Accessibility & ARIA Telemetry
   const ariaAttrs = extractAriaAttributes(element);
   const implicitRole = getImplicitRole(element);
@@ -34,7 +129,7 @@ export function extractElementData(element) {
 
   // Dedicated Component HTML & CSS Extraction
   const componentHtml = extractComponentHTML(element);
-  const componentCss = extractComponentCSS(element) || rawCss;
+  const componentCss = extractComponentCSS(element, effectiveColors) || rawCss;
 
   // General Attributes & Properties
   const general = {
@@ -87,6 +182,10 @@ export function extractElementData(element) {
     componentHtml,
     componentCss,
     pageStyles,
+    effectiveBg: effectiveColors.effectiveBg,
+    effectiveColor: effectiveColors.effectiveColor,
+    effectiveFontFamily: effectiveColors.effectiveFontFamily,
+    colorScheme: effectiveColors.colorScheme,
     baseUrl: window.location.href,
     widthPx: Math.round(rect.width),
     heightPx: Math.round(rect.height)
@@ -94,7 +193,7 @@ export function extractElementData(element) {
 }
 
 /**
- * Extracts clean, isolated component HTML with absolute URLs and form value preservation
+ * Extracts clean, isolated component HTML with absolute URLs, SVG symbol inlining, and media preservation
  * @param {Element} element
  * @returns {string}
  */
@@ -194,20 +293,77 @@ export function extractComponentHTML(element) {
     }
   });
 
+  // Instagram & modern web SVG <use> symbol inlining:
+  // Detects references to symbols in the host page and inlines them into <defs>
+  const uses = clone.querySelectorAll('use');
+  if (uses.length > 0) {
+    const symbolMap = new Map();
+    uses.forEach(useEl => {
+      const href = useEl.getAttribute('href') || useEl.getAttribute('xlink:href');
+      if (!href) return;
+      if (href.startsWith('#')) {
+        const id = href.slice(1);
+        if (!symbolMap.has(id)) {
+          const hostEl = document.getElementById(id);
+          if (hostEl) {
+            symbolMap.set(id, hostEl.outerHTML);
+          }
+        }
+      } else if (!href.startsWith('http://') && !href.startsWith('https://')) {
+        try {
+          const absHref = new URL(href, base).href;
+          useEl.setAttribute('href', absHref);
+          if (useEl.hasAttribute('xlink:href')) {
+            useEl.setAttribute('xlink:href', absHref);
+          }
+        } catch (e) {}
+      }
+    });
+
+    if (symbolMap.size > 0) {
+      const defsSvg = document.createElement('svg');
+      defsSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      defsSvg.style.display = 'none';
+      defsSvg.innerHTML = `<defs>${Array.from(symbolMap.values()).join('\n')}</defs>`;
+      clone.insertBefore(defsSvg, clone.firstChild);
+    }
+  }
+
+  // Handle YouTube custom elements with Shadow DOM if present
+  try {
+    const origCustoms = Array.from(element.querySelectorAll('*')).filter(el => el.shadowRoot);
+    if (origCustoms.length > 0) {
+      origCustoms.forEach(origEl => {
+        const tag = origEl.tagName.toLowerCase();
+        const cloneTarget = clone.querySelector(tag);
+        if (cloneTarget && !cloneTarget.hasChildNodes() && origEl.shadowRoot) {
+          const shadowChildren = Array.from(origEl.shadowRoot.children);
+          shadowChildren.forEach(sc => {
+            cloneTarget.appendChild(sc.cloneNode(true));
+          });
+        }
+      });
+    }
+  } catch (e) {}
+
   return clone.outerHTML || '';
 }
 
 /**
- * Extracts self-contained, scoped CSS required to visually reproduce the component in isolation
+ * Extracts self-contained, scoped CSS required to visually reproduce the component in isolation.
+ * Automatically stamps effective background and text color to preserve source of truth.
+ * Captures ::before and ::after pseudo-elements.
+ * 
  * @param {Element} element
+ * @param {Object} [effectiveColors=null]
  * @returns {string} Scoped CSS declarations block
  */
-export function extractComponentCSS(element) {
+export function extractComponentCSS(element, effectiveColors = null) {
   if (!(element instanceof Element)) return '';
 
+  const colors = effectiveColors || getEffectiveElementColors(element);
   const rect = element.getBoundingClientRect();
   const widthPx = Math.round(rect.width);
-  const heightPx = Math.round(rect.height);
 
   const rules = [];
 
@@ -245,7 +401,6 @@ export function extractComponentCSS(element) {
     const lines = [];
 
     for (const prop of CSS_PROPS) {
-      // Phase 4 compliance: Never force page-level position/offsets onto the root component
       if (isRoot) {
         if (prop === 'position') {
           lines.push('  position: relative !important;');
@@ -256,7 +411,6 @@ export function extractComponentCSS(element) {
           continue;
         }
         if (prop === 'margin' || prop === 'margin-top' || prop === 'margin-left' || prop === 'margin-right' || prop === 'margin-bottom') {
-          // Normalize root margins so component is neatly centered inside canvas
           if (prop === 'margin') lines.push('  margin: 0 auto !important;');
           continue;
         }
@@ -268,20 +422,68 @@ export function extractComponentCSS(element) {
       if (val === 'auto' && (prop === 'z-index' || (!isRoot && (prop === 'width' || prop === 'height' || prop === 'min-width' || prop === 'min-height')))) continue;
       if (val === 'normal' && (prop === 'line-height' || prop === 'letter-spacing' || prop === 'gap' || prop === 'row-gap' || prop === 'column-gap')) continue;
       if (val === '0px' && (prop.startsWith('margin') || prop.startsWith('padding') || prop.startsWith('border-radius'))) continue;
+      
+      // Preserve effective background & text colors on root if transparent
+      if (isRoot && prop === 'background-color') {
+        const bgVal = (val === 'rgba(0, 0, 0, 0)' || val === 'transparent') ? colors.effectiveBg : val;
+        if (bgVal && bgVal !== 'rgba(0, 0, 0, 0)' && bgVal !== 'transparent') {
+          lines.push(`  background-color: ${bgVal} !important;`);
+        }
+        continue;
+      }
+      if (isRoot && prop === 'color') {
+        const fgVal = (val === 'rgba(0, 0, 0, 0)' || val === 'transparent') ? colors.effectiveColor : val;
+        if (fgVal) {
+          lines.push(`  color: ${fgVal} !important;`);
+        }
+        continue;
+      }
+      if (isRoot && prop === 'font-family') {
+        const ffVal = val || colors.effectiveFontFamily;
+        if (ffVal) {
+          lines.push(`  font-family: ${ffVal} !important;`);
+        }
+        continue;
+      }
+
       if (val === 'rgba(0, 0, 0, 0)' && (prop === 'background-color' || prop.includes('color'))) continue;
       if (val === '0px none rgb(0, 0, 0)' || val === '0px none rgb(255, 255, 255)') continue;
 
       lines.push(`  ${prop}: ${val};`);
     }
 
-    // Preserve root bounding box width so responsive containers don't arbitrarily collapse or stretch
+    // Preserve root natural dimensions without squashing
     if (isRoot && widthPx > 20) {
       lines.push(`  width: ${widthPx}px;`);
-      lines.push(`  max-width: 100%;`);
       lines.push(`  box-sizing: border-box;`);
     }
 
     return lines.join('\n');
+  }
+
+  function extractPseudoStyles(el, pseudoSelector, targetRuleSelector) {
+    try {
+      const ps = window.getComputedStyle(el, pseudoSelector);
+      const content = ps.getPropertyValue('content');
+      if (!content || content === 'none' || content === 'normal') return null;
+      const lines = [];
+      lines.push(`  content: ${content};`);
+      const PSEUDO_PROPS = [
+        'display', 'position', 'top', 'left', 'right', 'bottom',
+        'width', 'height', 'background', 'background-color', 'background-image',
+        'border', 'border-radius', 'color', 'font-size', 'opacity', 'z-index', 'transform'
+      ];
+      for (const p of PSEUDO_PROPS) {
+        const val = ps.getPropertyValue(p);
+        if (val && val !== 'none' && val !== 'auto' && val !== 'rgba(0, 0, 0, 0)') {
+          lines.push(`  ${p}: ${val};`);
+        }
+      }
+      if (lines.length > 1) {
+        return `${targetRuleSelector}${pseudoSelector} {\n${lines.join('\n')}\n}`;
+      }
+    } catch (e) {}
+    return null;
   }
 
   function getRelativePath(child, root) {
@@ -311,11 +513,16 @@ export function extractComponentCSS(element) {
     rules.push(`/* Root: <${rootTag}> */\n${rootSelector} {\n${rootDecls}\n}`);
   }
 
-  // 2. Descendants (up to 80 elements with 100% unique structural path)
-  const descendants = Array.from(element.querySelectorAll('*')).slice(0, 80);
+  // Root pseudo-elements
+  const rootBefore = extractPseudoStyles(element, '::before', rootSelector);
+  if (rootBefore) rules.push(rootBefore);
+  const rootAfter = extractPseudoStyles(element, '::after', rootSelector);
+  if (rootAfter) rules.push(rootAfter);
+
+  // 2. Descendants (up to 250 elements)
+  const descendants = Array.from(element.querySelectorAll('*')).slice(0, 250);
 
   for (const child of descendants) {
-    // Skip internal inspector elements
     if (child.closest('#website-inspector-root')) continue;
 
     const relPath = getRelativePath(child, element);
@@ -326,6 +533,11 @@ export function extractComponentCSS(element) {
     if (decls) {
       rules.push(`${selector} {\n${decls}\n}`);
     }
+
+    const childBefore = extractPseudoStyles(child, '::before', selector);
+    if (childBefore) rules.push(childBefore);
+    const childAfter = extractPseudoStyles(child, '::after', selector);
+    if (childAfter) rules.push(childAfter);
   }
 
   return rules.join('\n\n');

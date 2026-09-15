@@ -21,14 +21,18 @@
  * @returns {string} Fully isolated HTML document string
  */
 export function buildLivePreviewDoc(html, css, options = {}) {
-  const theme = options.theme || 'dark';
+  // Component appearance is determined SOLELY by the original component, NEVER by extension theme
+  const colorScheme = options.colorScheme || 'dark';
+  const effectiveBg = options.effectiveBg || (colorScheme === 'dark' ? '#0d1117' : '#ffffff');
+  const effectiveColor = options.effectiveColor || (colorScheme === 'dark' ? '#e6edf3' : '#1f2328');
+  const effectiveFontFamily = options.effectiveFontFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
   const zoom = typeof options.zoom === 'number' ? options.zoom : 1.0;
   const targetWidth = (options.width && options.width > 20) ? Math.round(options.width) : null;
 
-  // Canvas theme background (surrounds component)
-  const canvasBg = theme === 'dark' ? '#000000' : '#FFFFFF';
-  // Default canvas text color only applies to canvas container as fallback, without overriding component
-  const canvasTextColor = theme === 'dark' ? '#f5f5f7' : '#1d1d1f';
+  // Canvas background and typography strictly match the component's original rendering environment
+  const canvasBg = effectiveBg;
+  const canvasTextColor = effectiveColor;
 
   // Ensure table/list fragments are valid in isolation
   let safeHtml = (html || '').trim();
@@ -48,14 +52,15 @@ export function buildLivePreviewDoc(html, css, options = {}) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${options.pageStyles || ''}
   <style>
-    /* ── Isolated Canvas Surface ── */
+    /* ── Isolated Canvas Surface (Source of Truth: Original Component) ── */
     html {
       margin: 0;
       padding: 0;
       background-color: ${canvasBg};
       color: ${canvasTextColor};
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-family: ${effectiveFontFamily};
       overflow: auto;
     }
     body {
@@ -64,7 +69,8 @@ export function buildLivePreviewDoc(html, css, options = {}) {
       min-height: 100vh;
       box-sizing: border-box;
       background-color: ${canvasBg};
-      color: inherit;
+      color: ${canvasTextColor};
+      font-family: ${effectiveFontFamily};
       display: flex;
       justify-content: center;
       align-items: flex-start;
@@ -74,6 +80,9 @@ export function buildLivePreviewDoc(html, css, options = {}) {
     /* ── Component Canvas Anchor & Zoom ── */
     #preview-root {
       ${widthStyle}
+      background-color: ${canvasBg};
+      color: ${canvasTextColor};
+      font-family: ${effectiveFontFamily};
       transform: scale(${zoom});
       transform-origin: top center;
       transition: transform 0.1s ease-out;
