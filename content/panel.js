@@ -643,7 +643,7 @@ export class InspectorPanel {
         try {
           header.setPointerCapture(e.pointerId);
           this._activePointerId = e.pointerId;
-        } catch (err) {}
+        } catch (err) { }
       }
 
       const rect = this.panelContainer.getBoundingClientRect();
@@ -688,7 +688,7 @@ export class InspectorPanel {
       if (header.releasePointerCapture && this._activePointerId !== undefined) {
         try {
           header.releasePointerCapture(this._activePointerId);
-        } catch (err) {}
+        } catch (err) { }
         this._activePointerId = undefined;
       }
     };
@@ -1495,16 +1495,7 @@ export class InspectorPanel {
                 Switch to ${effectiveTheme === THEMES.DARK ? '☀️ Light' : '🌙 Dark'} Mode
               </button>
             </div>
-          </div>
-
-          <!-- Keyboard Shortcuts Card -->
-          <div class="qursor-card">
-            <div style="font-weight:700;font-size:12px;color:var(--q-text-primary);margin-bottom:4px;">Shortcuts</div>
-            <div class="prop-grid">
-              ${_propRow('Toggle Inspect Mode', '<kbd style="background:var(--q-bg-primary);border:1px solid var(--q-border);border-radius:4px;padding:2px 5px;font-family:monospace;font-size:10px;">Ctrl+Shift+I</kbd>')}
-              ${_propRow('Exit Inspect Mode', '<kbd style="background:var(--q-bg-primary);border:1px solid var(--q-border);border-radius:4px;padding:2px 5px;font-family:monospace;font-size:10px;">Escape</kbd>')}
-            </div>
-          </div>
+          </div>  
         `;
         break;
       }
