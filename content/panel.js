@@ -31,6 +31,7 @@ import {
   switchLlmProvider,
   detectProvider,
   maskApiKey,
+  isModelObsolete,
   LLM_PROVIDERS,
   DEFAULT_MODELS,
   DEFAULT_GEMINI_MODEL,
@@ -1578,14 +1579,18 @@ export class InspectorPanel {
                   ${(() => {
                     const currentProvider = this.llmConfig.provider || 'gemini';
                     const models = PROVIDER_FREE_MODELS[currentProvider] || [];
-                    const currentModel = this.llmConfig.model || DEFAULT_MODELS[currentProvider] || DEFAULT_GEMINI_MODEL;
+                    let currentModel = this.llmConfig.model;
+                    if (!currentModel || isModelObsolete(currentModel) || !models.some(m => m.id === currentModel)) {
+                      currentModel = DEFAULT_MODELS[currentProvider] || models[0]?.id || DEFAULT_GEMINI_MODEL;
+                      this.llmConfig.model = currentModel;
+                    }
                     const hasCurrent = models.some(m => m.id === currentModel);
                     let optionsHtml = models.map(m => `
                       <option value="${_esc(m.id)}" ${(currentModel === m.id) ? 'selected' : ''}>
                         ${_esc(m.name)}
                       </option>
                     `).join('');
-                    if (!hasCurrent && currentModel) {
+                    if (!hasCurrent && currentModel && !isModelObsolete(currentModel)) {
                       optionsHtml = `<option value="${_esc(currentModel)}" selected>${_esc(currentModel)} (Custom)</option>` + optionsHtml;
                     }
                     return optionsHtml;

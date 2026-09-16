@@ -24,10 +24,10 @@ export const PROVIDER_FREE_MODELS = {
     { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Low-Latency Fallback)' }
   ],
   [LLM_PROVIDERS.GROQ]: [
-    { id: 'llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout (Latest 2026 - Recommended)' },
-    { id: 'llama-4-maverick-17b-128e-instruct', name: 'Llama 4 Maverick (Reasoning & Multimodal)' },
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile' },
-    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Ultra-Fast)' }
+    { id: 'openai/gpt-oss-120b', name: 'OpenAI GPT-OSS 120B (Groq Hosted - Recommended)' },
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (Stable Fallback)' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Ultra-Fast)' },
+    { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT-OSS 20B (Fast Reasoning)' }
   ],
   [LLM_PROVIDERS.OPENROUTER]: [
     { id: 'openrouter/free', name: 'OpenRouter Free Router (Auto Best Free Model - Recommended)' },
@@ -37,19 +37,18 @@ export const PROVIDER_FREE_MODELS = {
     { id: 'qwen/qwen-2.5-coder-32b-instruct:free', name: 'Qwen 2.5 Coder 32B (Free / $0)' }
   ],
   [LLM_PROVIDERS.OPENAI]: [
-    { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna (Latest 2026 Cost-Optimized - Recommended)' },
-    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra (Balanced 2026 Workhorse)' },
-    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol (Flagship Frontier 2026)' },
-    { id: 'o4-mini', name: 'o4-mini (Fast Reasoning)' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini (Legacy)' }
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini (Recommended)' },
+    { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna' },
+    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra' },
+    { id: 'o4-mini', name: 'o4-mini' }
   ]
 };
 
 export const DEFAULT_MODELS = {
   [LLM_PROVIDERS.GEMINI]: 'gemini-3.8-flash',
-  [LLM_PROVIDERS.OPENAI]: 'gpt-5.6-luna',
+  [LLM_PROVIDERS.OPENAI]: 'gpt-4o-mini',
   [LLM_PROVIDERS.OPENROUTER]: 'openrouter/free',
-  [LLM_PROVIDERS.GROQ]: 'llama-4-scout-17b-16e-instruct'
+  [LLM_PROVIDERS.GROQ]: 'openai/gpt-oss-120b'
 };
 
 export const VERIFIED_GEMINI_MODELS = [
@@ -61,6 +60,24 @@ export const VERIFIED_GEMINI_MODELS = [
 ];
 
 const REQUEST_TIMEOUT_MS = 35000;
+
+/**
+ * Checks if a model ID is obsolete or shut down across providers
+ * @param {string} modelId 
+ * @returns {boolean}
+ */
+export function isModelObsolete(modelId) {
+  if (!modelId || typeof modelId !== 'string') return true;
+  const lower = modelId.toLowerCase();
+  return (
+    lower.includes('1.5') ||
+    lower.includes('2.0') ||
+    lower.includes('2.5') ||
+    lower.includes('live') ||
+    lower.includes('scout') ||
+    lower.includes('maverick')
+  );
+}
 
 /**
  * Discovers available Gemini models supporting generateContent using the user's API key
@@ -117,15 +134,17 @@ export function maskApiKey(key) {
 }
 
 /**
- * Retrieves the stored API key and LLM configuration from chrome.storage.sync
- * @returns {Promise<{ apiKey: string, provider: string, model: string, isConfigured: boolean }>}
+ * Retrieves the current LLM configuration from chrome.storage.sync
+ * @param {string|null} [targetProvider=null] If specified, retrieves key for this provider
+ * @returns {Promise<{ apiKey: string, provider: string, model: string, isConfigured: boolean, apiKeys: Object }>}
  */
 export async function getLlmConfig(targetProvider = null) {
   if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
+    const activeProvider = targetProvider || LLM_PROVIDERS.GEMINI;
     return {
       apiKey: '',
-      provider: LLM_PROVIDERS.GEMINI,
-      model: DEFAULT_GEMINI_MODEL,
+      provider: activeProvider,
+      model: DEFAULT_MODELS[activeProvider] || DEFAULT_GEMINI_MODEL,
       isConfigured: false,
       apiKeys: {}
     };
@@ -144,15 +163,12 @@ export async function getLlmConfig(targetProvider = null) {
 
       const validModels = (PROVIDER_FREE_MODELS[activeProvider] || []).map(m => m.id);
       let model = res.qursor_llm_model;
-      if (!model || !validModels.includes(model)) {
+      if (!model || !validModels.includes(model) || isModelObsolete(model)) {
         model = DEFAULT_MODELS[activeProvider] || validModels[0] || DEFAULT_GEMINI_MODEL;
-      }
-
-      if (
-        activeProvider === LLM_PROVIDERS.GEMINI &&
-        (model.includes('1.5') || model.includes('2.0') || model.includes('2.5') || model.includes('live'))
-      ) {
-        model = DEFAULT_GEMINI_MODEL;
+        // Proactively sanitize stored model in chrome.storage so stale model doesn't linger
+        try {
+          chrome.storage.sync.set({ qursor_llm_model: model });
+        } catch (_) {}
       }
 
       resolve({
@@ -180,15 +196,8 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
 
   const validModels = (PROVIDER_FREE_MODELS[resolvedProvider] || []).map(m => m.id);
   let resolvedModel = model || currentConfig.model;
-  if (!resolvedModel || !validModels.includes(resolvedModel)) {
+  if (!resolvedModel || !validModels.includes(resolvedModel) || isModelObsolete(resolvedModel)) {
     resolvedModel = DEFAULT_MODELS[resolvedProvider] || validModels[0] || DEFAULT_GEMINI_MODEL;
-  }
-
-  if (
-    resolvedProvider === LLM_PROVIDERS.GEMINI &&
-    (resolvedModel.includes('1.5') || resolvedModel.includes('2.0') || resolvedModel.includes('2.5') || resolvedModel.includes('live'))
-  ) {
-    resolvedModel = DEFAULT_GEMINI_MODEL;
   }
 
   const updatedKeys = { ...(currentConfig.apiKeys || {}) };
@@ -233,10 +242,14 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
  * @returns {Promise<Object>}
  */
 export async function switchLlmProvider(provider, model = null) {
-  const currentConfig = await getLlmConfig(provider);
   const resolvedProvider = provider || LLM_PROVIDERS.GEMINI;
+  const currentConfig = await getLlmConfig(resolvedProvider);
   const validModels = (PROVIDER_FREE_MODELS[resolvedProvider] || []).map(m => m.id);
-  const resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || validModels[0] || '';
+
+  let resolvedModel = model;
+  if (!resolvedModel || !validModels.includes(resolvedModel) || isModelObsolete(resolvedModel)) {
+    resolvedModel = DEFAULT_MODELS[resolvedProvider] || validModels[0] || '';
+  }
   const apiKey = (currentConfig.apiKeys && currentConfig.apiKeys[resolvedProvider]) || '';
 
   if (typeof chrome !== 'undefined' && chrome?.storage?.sync) {
@@ -296,11 +309,10 @@ export async function clearLlmConfig(provider = null) {
  */
 export function getFallbackModels(provider, primaryModel) {
   const allowedModels = (PROVIDER_FREE_MODELS[provider] || []).map(m => m.id);
-  const isObsolete = (id) => !id || id.includes('1.5') || id.includes('2.0') || id.includes('2.5') || id.includes('live');
 
   let effectivePrimary = primaryModel;
-  if (provider === LLM_PROVIDERS.GEMINI && (isObsolete(effectivePrimary) || !allowedModels.includes(effectivePrimary))) {
-    effectivePrimary = DEFAULT_GEMINI_MODEL;
+  if (!effectivePrimary || isModelObsolete(effectivePrimary) || !allowedModels.includes(effectivePrimary)) {
+    effectivePrimary = DEFAULT_MODELS[provider] || allowedModels[0] || DEFAULT_GEMINI_MODEL;
   }
 
   const candidates = [effectivePrimary, ...allowedModels.filter(id => id !== effectivePrimary)];
@@ -400,20 +412,33 @@ export async function executeLlmRequest({
             throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
           }
 
-          // Rule 4: 400 -> stop and report invalid request
-          if (code === 400) {
-            throw new Error(`Gemini API bad request (400): ${detail}`);
-          }
+          // Rule 3 & 4: Model unavailable or nonexistent -> immediately skip model. Do not retry on nonexistent models!
+          const isGeminiModelUnavailable = (
+            code === 404 ||
+            errData.error?.status === 'NOT_FOUND' ||
+            (code === 400 && (
+              detail.includes('models/') ||
+              detail.includes('not found') ||
+              detail.includes('does not exist') ||
+              detail.includes('is not supported') ||
+              detail.includes('bidiGenerateContent') ||
+              detail.includes('WebSocket')
+            ))
+          );
 
-          // Rule 3 & 4: 404 -> immediately skip model. Do not retry on 404!
-          if (code === 404) {
+          if (isGeminiModelUnavailable) {
             if (mIdx < candidateModels.length - 1) {
               const nextModel = candidateModels[mIdx + 1];
               console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
               clearTimeout(timeoutId);
               break;
             }
-            throw new Error(`Configured Gemini model (${activeModel}) is unavailable (404).`);
+            throw new Error(`Configured Gemini model (${activeModel}) is unavailable: ${detail}`);
+          }
+
+          // Rule 4: 400 -> stop and report invalid request
+          if (code === 400) {
+            throw new Error(`Gemini API bad request (400): ${detail}`);
           }
 
           // Rule 4: 503 & 429 -> bounded retry/backoff, then fallback
@@ -482,6 +507,31 @@ export async function executeLlmRequest({
           const errData = await res.json().catch(() => ({}));
           const code = res.status;
           const detail = errData.error?.message || res.statusText || 'Unknown error';
+          const errCode = errData.error?.code || '';
+          const errType = errData.error?.type || '';
+
+          // Check for model_not_found / nonexistent model errors (e.g. Groq 400/404 model_not_found)
+          const isModelUnavailable = (
+            code === 404 ||
+            errCode === 'model_not_found' ||
+            errType === 'model_not_found' ||
+            (errType === 'invalid_request_error' && (detail.includes('does not exist') || detail.includes('access to it'))) ||
+            detail.includes('does not exist') ||
+            detail.includes('not found') ||
+            detail.includes('access to it') ||
+            detail.includes('is not supported') ||
+            detail.includes('models/')
+          );
+
+          if (isModelUnavailable) {
+            if (mIdx < candidateModels.length - 1) {
+              const nextModel = candidateModels[mIdx + 1];
+              console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
+              clearTimeout(timeoutId);
+              break;
+            }
+            throw new Error(`${provider.toUpperCase()} model (${activeModel}) unavailable: ${detail}`);
+          }
 
           if (code === 401 || code === 403) {
             throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
@@ -489,16 +539,6 @@ export async function executeLlmRequest({
 
           if (code === 400) {
             throw new Error(`${provider.toUpperCase()} bad request (400): ${detail}`);
-          }
-
-          if (code === 404) {
-            if (mIdx < candidateModels.length - 1) {
-              const nextModel = candidateModels[mIdx + 1];
-              console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
-              clearTimeout(timeoutId);
-              break;
-            }
-            throw new Error(`${provider.toUpperCase()} model (${activeModel}) unavailable (404).`);
           }
 
           if (code === 503 || code === 429 || code === 500) {
@@ -530,7 +570,12 @@ export async function executeLlmRequest({
           throw new Error('LLM request was canceled or timed out.');
         }
 
-        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403') || err.message.includes('bad request (400)'))) {
+        const isFatalBadRequest = err.message && err.message.includes('bad request (400)') &&
+          !err.message.includes('does not exist') &&
+          !err.message.includes('not found') &&
+          !err.message.includes('access to it');
+
+        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403') || isFatalBadRequest)) {
           throw err;
         }
 
