@@ -17,13 +17,11 @@ export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 
 export const PROVIDER_FREE_MODELS = {
   [LLM_PROVIDERS.GEMINI]: [
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Latest 2026 - Recommended)' },
-    { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash (Efficiency Baseline)' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast Multimodal)' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Stable Free Tier)' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (Ultra-Fast)' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (High Context)' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Complex Reasoning)' }
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Primary - Recommended)' },
+    { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash (Fallback 1)' },
+    { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash (Fallback 2)' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash (Fallback 3)' },
+    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Low-Latency Fallback)' }
   ],
   [LLM_PROVIDERS.GROQ]: [
     { id: 'llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout (Latest 2026 - Recommended)' },
@@ -57,11 +55,9 @@ export const DEFAULT_MODELS = {
 export const VERIFIED_GEMINI_MODELS = [
   'gemini-3.8-flash',
   'gemini-3.7-flash',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite'
 ];
 
 const REQUEST_TIMEOUT_MS = 35000;
@@ -125,12 +121,23 @@ export function maskApiKey(key) {
  * @returns {Promise<{ apiKey: string, provider: string, model: string, isConfigured: boolean }>}
  */
 export async function getLlmConfig() {
+  if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
+    return {
+      apiKey: '',
+      provider: LLM_PROVIDERS.GEMINI,
+      model: DEFAULT_GEMINI_MODEL,
+      isConfigured: false
+    };
+  }
   return new Promise((resolve) => {
     chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], (res) => {
       const apiKey = (res.qursor_api_key || '').trim();
       const provider = res.qursor_llm_provider || detectProvider(apiKey);
       let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL;
-      if (model === 'gemini-3.8-live') {
+      if (
+        provider === LLM_PROVIDERS.GEMINI &&
+        (model.includes('1.5') || model.includes('2.0') || model.includes('2.5') || model.includes('live'))
+      ) {
         model = DEFAULT_GEMINI_MODEL;
       }
       resolve({
@@ -154,8 +161,20 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
   const cleanKey = (apiKey || '').trim();
   const resolvedProvider = provider || detectProvider(cleanKey);
   let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || DEFAULT_GEMINI_MODEL;
-  if (resolvedModel === 'gemini-3.8-live') {
+  if (
+    resolvedProvider === LLM_PROVIDERS.GEMINI &&
+    (resolvedModel.includes('1.5') || resolvedModel.includes('2.0') || resolvedModel.includes('2.5') || resolvedModel.includes('live'))
+  ) {
     resolvedModel = DEFAULT_GEMINI_MODEL;
+  }
+
+  if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
+    return {
+      apiKey: cleanKey,
+      provider: resolvedProvider,
+      model: resolvedModel,
+      isConfigured: !!cleanKey
+    };
   }
 
   return new Promise((resolve) => {
@@ -179,6 +198,9 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
  * @returns {Promise<boolean>}
  */
 export async function clearLlmConfig() {
+  if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
+    return true;
+  }
   return new Promise((resolve) => {
     chrome.storage.sync.remove(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], () => {
       resolve(true);
@@ -193,28 +215,59 @@ export async function clearLlmConfig() {
 /**
  * Resolves candidate fallback models in priority order for the given provider.
  * Begins with the user-selected primary model, followed by all other verified free models for that provider.
+ * Excludes obsolete or shut-down models.
  * @param {string} provider 
  * @param {string} primaryModel 
  * @returns {string[]} Ordered list of unique model IDs to try
  */
 export function getFallbackModels(provider, primaryModel) {
-  const modelList = (PROVIDER_FREE_MODELS[provider] || []).map(m => m.id);
-  const candidates = [primaryModel, ...modelList.filter(id => id !== primaryModel)];
+  const allowedModels = (PROVIDER_FREE_MODELS[provider] || []).map(m => m.id);
+  const isObsolete = (id) => !id || id.includes('1.5') || id.includes('2.0') || id.includes('2.5') || id.includes('live');
+
+  let effectivePrimary = primaryModel;
+  if (provider === LLM_PROVIDERS.GEMINI && (isObsolete(effectivePrimary) || !allowedModels.includes(effectivePrimary))) {
+    effectivePrimary = DEFAULT_GEMINI_MODEL;
+  }
+
+  const candidates = [effectivePrimary, ...allowedModels.filter(id => id !== effectivePrimary)];
   return [...new Set(candidates.filter(Boolean))];
 }
 
-async function executeLlmRequest({ provider, model, apiKey, messages, temperature = 0.2, jsonMode = false }) {
+export async function executeLlmRequest({
+  provider,
+  model,
+  apiKey,
+  messages,
+  temperature = 0.2,
+  jsonMode = false,
+  requestId = null,
+  signal = null,
+  maxRetriesPerModel = 1,
+  backoffMs = 1500,
+  returnMeta = false
+}) {
+  const reqId = requestId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'edit-' + Date.now());
   const candidateModels = getFallbackModels(provider, model);
   let lastError = null;
 
   for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
     const activeModel = candidateModels[mIdx];
     let attempt = 0;
-    const MAX_RETRIES_PER_MODEL = 1;
 
-    while (attempt <= MAX_RETRIES_PER_MODEL) {
+    while (attempt <= maxRetriesPerModel) {
+      console.log(`[LLM EDIT ${reqId}] model=${activeModel} attempt=${attempt + 1}`);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      const onExternalAbort = () => controller.abort();
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timeoutId);
+          throw new Error('LLM request was canceled.');
+        }
+        signal.addEventListener('abort', onExternalAbort, { once: true });
+      }
 
       try {
         if (provider === LLM_PROVIDERS.GEMINI) {
@@ -254,56 +307,64 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
             signal: controller.signal
           });
 
-          // If 503 (server capacity/model overloaded) or 500: Try next model in fallback list!
-          if ((res.status === 503 || res.status === 500) && mIdx < candidateModels.length - 1) {
-            const nextModel = candidateModels[mIdx + 1];
-            console.warn(`[Qursor++ LLM] Gemini model "${activeModel}" returned ${res.status} (overloaded). Automatically falling back to "${nextModel}"...`);
-            clearTimeout(timeoutId);
-            break; // Break retry loop to try the fallback model immediately
+          console.log(`[LLM EDIT ${reqId}] status=${res.status}`);
+
+          if (res.ok) {
+            const data = await res.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!rawText) throw new Error('Received empty response from Gemini API.');
+            const trimmed = rawText.trim();
+            return returnMeta ? { text: trimmed, model: activeModel, reqId } : trimmed;
           }
 
-          // Backoff retry on same model if rate-limited (429) or transient 503 on the final fallback
-          if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES_PER_MODEL) {
-            attempt++;
-            const backoffDelay = 1500;
-            console.warn(`[Qursor++ LLM] Gemini server returned ${res.status} on "${activeModel}". Retrying in ${backoffDelay}ms...`);
-            clearTimeout(timeoutId);
-            await new Promise(resolve => setTimeout(resolve, backoffDelay));
-            continue;
+          const errData = await res.json().catch(() => ({}));
+          const code = res.status;
+          const detail = errData.error?.message || res.statusText || 'Unknown error';
+
+          // Rule 4: 401/403 -> stop and report authentication/permission problem
+          if (code === 401 || code === 403) {
+            throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
           }
 
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            const code = res.status;
-            const detail = errData.error?.message || res.statusText || 'Unknown error';
+          // Rule 4: 400 -> stop and report invalid request
+          if (code === 400) {
+            throw new Error(`Gemini API bad request (400): ${detail}`);
+          }
 
-            // If 404 (model unavailable/retired) OR 400 with WebSocket/bidiGenerateContent only, fall back to next model!
-            if ((code === 404 || (code === 400 && (detail.includes('WebSocket') || detail.includes('bidiGenerateContent') || detail.includes('not supported')))) && mIdx < candidateModels.length - 1) {
+          // Rule 3 & 4: 404 -> immediately skip model. Do not retry on 404!
+          if (code === 404) {
+            if (mIdx < candidateModels.length - 1) {
               const nextModel = candidateModels[mIdx + 1];
-              console.warn(`[Qursor++ LLM] Gemini model "${activeModel}" returned ${code} (${detail}). Automatically falling back to "${nextModel}"...`);
+              console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
+              clearTimeout(timeoutId);
+              break;
+            }
+            throw new Error(`Configured Gemini model (${activeModel}) is unavailable (404).`);
+          }
+
+          // Rule 4: 503 & 429 -> bounded retry/backoff, then fallback
+          if (code === 503 || code === 429 || code === 500) {
+            if (attempt < maxRetriesPerModel) {
+              attempt++;
+              clearTimeout(timeoutId);
+              await new Promise(resolve => setTimeout(resolve, backoffMs));
+              continue;
+            }
+
+            if (mIdx < candidateModels.length - 1) {
+              const nextModel = candidateModels[mIdx + 1];
+              console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
               clearTimeout(timeoutId);
               break;
             }
 
-            if (code === 404) {
-              throw new Error(`Configured Gemini model (${activeModel}) is unavailable. Please select a supported model in Settings.`);
-            } else if (code === 401 || code === 403) {
-              throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
-            } else if (code === 429) {
+            if (code === 429) {
               throw new Error('Gemini API rate limit exceeded (429). Please wait a moment before trying again.');
-            } else if (code === 503 || code === 500) {
-              throw new Error('Gemini is temporarily unavailable across all fallback models. Your previous component was preserved.');
-            } else if (code === 400) {
-              throw new Error(`Gemini API bad request (400): ${detail}`);
-            } else {
-              throw new Error(`Gemini API Error (${code}): ${detail}`);
             }
+            throw new Error('Gemini is temporarily unavailable across all fallback models. Your previous component was preserved.');
           }
 
-          const data = await res.json();
-          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (!rawText) throw new Error('Received empty response from Gemini API.');
-          return rawText.trim();
+          throw new Error(`Gemini API Error (${code}): ${detail}`);
 
         } else {
           // OpenAI, OpenRouter, Groq
@@ -334,75 +395,83 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
             signal: controller.signal
           });
 
-          // If 503 or 500 on OpenAI / OpenRouter / Groq, fall back to next model
-          if ((res.status === 503 || res.status === 500) && mIdx < candidateModels.length - 1) {
-            const nextModel = candidateModels[mIdx + 1];
-            console.warn(`[Qursor++ LLM] ${provider.toUpperCase()} model "${activeModel}" returned ${res.status}. Automatically falling back to "${nextModel}"...`);
-            clearTimeout(timeoutId);
-            break;
+          console.log(`[LLM EDIT ${reqId}] status=${res.status}`);
+
+          if (res.ok) {
+            const data = await res.json();
+            const rawText = data.choices?.[0]?.message?.content;
+            if (!rawText) throw new Error(`Received empty response from ${provider.toUpperCase()}.`);
+            const trimmed = rawText.trim();
+            return returnMeta ? { text: trimmed, model: activeModel, reqId } : trimmed;
           }
 
-          if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES_PER_MODEL) {
-            attempt++;
-            const backoffDelay = 1500;
-            console.warn(`[Qursor++ LLM] ${provider.toUpperCase()} server returned ${res.status} on "${activeModel}". Retrying in ${backoffDelay}ms...`);
-            clearTimeout(timeoutId);
-            await new Promise(resolve => setTimeout(resolve, backoffDelay));
-            continue;
+          const errData = await res.json().catch(() => ({}));
+          const code = res.status;
+          const detail = errData.error?.message || res.statusText || 'Unknown error';
+
+          if (code === 401 || code === 403) {
+            throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
           }
 
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            const code = res.status;
-            const detail = errData.error?.message || res.statusText || 'Unknown error';
+          if (code === 400) {
+            throw new Error(`${provider.toUpperCase()} bad request (400): ${detail}`);
+          }
 
-            if (code === 404 && mIdx < candidateModels.length - 1) {
+          if (code === 404) {
+            if (mIdx < candidateModels.length - 1) {
               const nextModel = candidateModels[mIdx + 1];
-              console.warn(`[Qursor++ LLM] ${provider.toUpperCase()} model "${activeModel}" returned 404. Falling back to "${nextModel}"...`);
+              console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
+              clearTimeout(timeoutId);
+              break;
+            }
+            throw new Error(`${provider.toUpperCase()} model (${activeModel}) unavailable (404).`);
+          }
+
+          if (code === 503 || code === 429 || code === 500) {
+            if (attempt < maxRetriesPerModel) {
+              attempt++;
+              clearTimeout(timeoutId);
+              await new Promise(resolve => setTimeout(resolve, backoffMs));
+              continue;
+            }
+
+            if (mIdx < candidateModels.length - 1) {
+              const nextModel = candidateModels[mIdx + 1];
+              console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
               clearTimeout(timeoutId);
               break;
             }
 
-            if (code === 401 || code === 403) {
-              throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
-            } else if (code === 429) {
+            if (code === 429) {
               throw new Error(`Rate limit exceeded on ${provider.toUpperCase()}. Please wait before retrying.`);
-            } else if (code === 503 || code === 500) {
-              throw new Error(`${provider.toUpperCase()} service temporarily unavailable (${code}). Please retry shortly.`);
-            } else {
-              throw new Error(`${provider.toUpperCase()} API Error (${code}): ${detail}`);
             }
+            throw new Error(`${provider.toUpperCase()} service temporarily unavailable (${code}). Please retry shortly.`);
           }
 
-          const data = await res.json();
-          const rawText = data.choices?.[0]?.message?.content;
-          if (!rawText) throw new Error(`Received empty response from ${provider.toUpperCase()}.`);
-          return rawText.trim();
+          throw new Error(`${provider.toUpperCase()} API Error (${code}): ${detail}`);
         }
       } catch (err) {
         lastError = err;
-        if (err.name === 'AbortError') {
-          if (mIdx < candidateModels.length - 1) {
-            console.warn(`[Qursor++ LLM] Model "${activeModel}" timed out. Falling back to "${candidateModels[mIdx + 1]}"...`);
-            clearTimeout(timeoutId);
-            break;
-          }
-          throw new Error('LLM request timed out after 35 seconds. Check your network or provider status.');
+        if (err.name === 'AbortError' || err.message?.includes('canceled')) {
+          throw new Error('LLM request was canceled or timed out.');
         }
 
-        // Fast-fail on auth errors since switching models cannot fix an invalid API key
-        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403'))) {
+        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403') || err.message.includes('bad request (400)'))) {
           throw err;
         }
 
         if (mIdx < candidateModels.length - 1) {
-          console.warn(`[Qursor++ LLM] Error with "${activeModel}": ${err.message}. Trying fallback "${candidateModels[mIdx + 1]}"...`);
+          const nextModel = candidateModels[mIdx + 1];
+          console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
           clearTimeout(timeoutId);
           break;
         }
         throw err;
       } finally {
         clearTimeout(timeoutId);
+        if (signal) {
+          signal.removeEventListener('abort', onExternalAbort);
+        }
       }
       attempt++;
     }
@@ -520,7 +589,16 @@ export function safeParseJson(rawText) {
  * @param {string} [params.theme='dark'] Active extension/canvas theme
  * @returns {Promise<{ html: string, css: string, changes: string[] }>}
  */
-export async function callLlmEditComponent({ instruction, currentHtml, currentCss = '', elementData = null, theme = 'dark' }) {
+export async function callLlmEditComponent({
+  instruction,
+  currentHtml,
+  currentCss = '',
+  elementData = null,
+  theme = 'dark',
+  requestId = null,
+  signal = null
+}) {
+  const reqId = requestId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'edit-' + Date.now());
   const config = await getLlmConfig();
   if (!config.apiKey) {
     throw new Error('API key not configured. Please open Settings and enter your API key.');
@@ -564,31 +642,37 @@ Return the complete updated component JSON:`;
     { role: 'user', content: userPrompt }
   ];
 
-  let rawResult = await executeLlmRequest({
+  const resultMeta = await executeLlmRequest({
     provider: config.provider,
     model: config.model,
     apiKey: config.apiKey,
     messages,
     temperature: 0.1,
-    jsonMode: true
+    jsonMode: true,
+    requestId: reqId,
+    signal,
+    returnMeta: true
   });
 
+  const rawResult = resultMeta.text;
   let parsed = safeParseJson(rawResult);
 
-  // Auto-Repair Attempt (Phase 14): If response was invalid, perform 1 repair attempt
+  // Auto-Repair Attempt (Phase 14): If response was invalid, perform 1 repair attempt using the model that succeeded
   if (!parsed || typeof parsed !== 'object' || typeof parsed.html !== 'string' || !parsed.html.trim()) {
     console.warn('[Qursor++ LLM] Initial response was invalid JSON schema. Attempting 1 repair request...');
     try {
       const repairRaw = await executeLlmRequest({
         provider: config.provider,
-        model: config.model,
+        model: resultMeta.model || config.model,
         apiKey: config.apiKey,
         messages: [
           { role: 'system', content: 'Return ONLY valid JSON with keys: "html" (string), "css" (string), "changes" (array of strings). Do not include markdown.' },
           { role: 'user', content: `Please convert this output into valid JSON for the instruction "${instruction}":\n${rawResult}` }
         ],
         temperature: 0.0,
-        jsonMode: true
+        jsonMode: true,
+        requestId: `${reqId}-repair`,
+        signal
       });
       parsed = safeParseJson(repairRaw);
     } catch (repairErr) {
@@ -632,9 +716,11 @@ Return the complete updated component JSON:`;
  * @param {string} params.css Extracted CSS rules
  * @param {Object} params.elementData Telemetry data
  * @param {Array} [params.assets=[]] Media assets
+ * @param {string|null} [params.requestId=null]
+ * @param {AbortSignal|null} [params.signal=null]
  * @returns {Promise<string>} Clean JSX code
  */
-export async function callLlmGenerateReact({ html, css, elementData = null, assets = [] }) {
+export async function callLlmGenerateReact({ html, css, elementData = null, assets = [], requestId = null, signal = null }) {
   const config = await getLlmConfig();
   if (!config.apiKey) {
     throw new Error('API key not configured. Please open Settings and enter your API key.');
@@ -685,7 +771,9 @@ Generate the complete React component with Tailwind CSS:`;
     apiKey: config.apiKey,
     messages,
     temperature: 0.1,
-    jsonMode: false
+    jsonMode: false,
+    requestId,
+    signal
   });
 
   // Strip accidental markdown fences

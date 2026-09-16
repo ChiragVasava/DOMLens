@@ -61,6 +61,11 @@ export class InspectorPanel {
       isConfigured: false
     };
 
+    // Concurrency guard & active edit lifecycle management (Requirement 7)
+    this.isApplyingEdit = false;
+    this.activeEditAbortController = null;
+    this.activeEditRequestId = null;
+
     this.themeManager = new ThemeManager(shadowRoot);
     this.toastManager = new ToastManager(shadowRoot);
 
@@ -887,6 +892,14 @@ export class InspectorPanel {
   // ─── LLM Edit Workflow (Section 7, 8, 11, 12, 13) ───
 
   async _handleApplyEdit() {
+    // Concurrency guard (Requirement 7):
+    // If an AI edit is already running, block duplicate clicks
+    if (this.isApplyingEdit) {
+      console.warn('[Qursor++ Edit] Apply ignored: An AI edit pipeline is already active.');
+      this.toastManager.show('An edit is already in progress. Please wait...', 'info');
+      return;
+    }
+
     const textarea = this.panelContainer.querySelector('#editInstructionArea');
     const instruction = textarea ? textarea.value.trim() : '';
 
@@ -905,6 +918,12 @@ export class InspectorPanel {
       return;
     }
 
+    // Concurrency guard engagement
+    this.isApplyingEdit = true;
+    this.activeEditAbortController = new AbortController();
+    const editRequestId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'edit-' + Date.now();
+    this.activeEditRequestId = editRequestId;
+
     const applyBtn = this.panelContainer.querySelector('#applyEditBtn');
     if (applyBtn) {
       applyBtn.disabled = true;
@@ -920,26 +939,40 @@ export class InspectorPanel {
         currentHtml: this.state.current.html,
         currentCss: this.state.current.css,
         elementData: this.state.original.elementData,
-        theme: effectiveTheme
+        theme: effectiveTheme,
+        requestId: editRequestId,
+        signal: this.activeEditAbortController.signal
       });
 
       // Update central component state
       this.state.updateCurrent(result.html, result.css, result.changes);
       this.toastManager.show('✓ Component updated with AI!', 'success');
-
-      // Re-render
-      this.renderTabContent();
     } catch (err) {
-      console.error('[Qursor++ Edit Error]:', err);
-      // NEVER corrupt the existing component on failure
-      this.state.setEditState({ isApplying: false, error: err.message });
-      const toastMsg = err.message.includes('temporarily unavailable') ? err.message : `LLM failed: ${err.message}`;
-      this.toastManager.show(toastMsg, 'error');
+      if (err.name === 'AbortError' || err.message?.includes('canceled')) {
+        console.log(`[LLM EDIT ${editRequestId}] Edit was canceled.`);
+        this.toastManager.show('Edit canceled.', 'info');
+      } else {
+        console.error(`[LLM EDIT ${editRequestId}] Edit failed:`, err);
+        // NEVER corrupt the existing component on failure
+        this.state.setEditState({ isApplying: false, error: err.message });
+        const toastMsg = err.message.includes('temporarily unavailable') ? err.message : `LLM failed: ${err.message}`;
+        this.toastManager.show(toastMsg, 'error');
+      }
+    } finally {
+      this.isApplyingEdit = false;
+      this.activeEditAbortController = null;
+      this.activeEditRequestId = null;
+      this.state.setEditState({ isApplying: false });
       this.renderTabContent();
     }
   }
 
   _handleResetEdit() {
+    if (this.activeEditAbortController) {
+      this.activeEditAbortController.abort();
+      this.activeEditAbortController = null;
+      this.isApplyingEdit = false;
+    }
     this.state.resetToOriginal();
     this.toastManager.show('✓ Reset component to original state', 'info');
     this.renderTabContent();
@@ -1009,6 +1042,11 @@ export class InspectorPanel {
   // ─── Public API ───
 
   updateData(data, element = null) {
+    if (this.activeEditAbortController) {
+      this.activeEditAbortController.abort();
+      this.activeEditAbortController = null;
+      this.isApplyingEdit = false;
+    }
     this.targetElement = element;
     if (!data) return;
 
@@ -1034,6 +1072,11 @@ export class InspectorPanel {
   }
 
   hide() {
+    if (this.activeEditAbortController) {
+      this.activeEditAbortController.abort();
+      this.activeEditAbortController = null;
+      this.isApplyingEdit = false;
+    }
     if (this.panelContainer) this.panelContainer.style.display = 'none';
   }
 
