@@ -19,9 +19,11 @@ export const PROVIDER_FREE_MODELS = {
   [LLM_PROVIDERS.GEMINI]: [
     { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Latest 2026 - Recommended)' },
     { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash (Efficiency Baseline)' },
-    { id: 'gemini-3.8-live', name: 'Gemini 3.8 Live (Low Latency / Dialogue)' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast Multimodal)' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Stable Free Tier)' }
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Stable Free Tier)' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (Ultra-Fast)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (High Context)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Complex Reasoning)' }
   ],
   [LLM_PROVIDERS.GROQ]: [
     { id: 'llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout (Latest 2026 - Recommended)' },
@@ -55,9 +57,11 @@ export const DEFAULT_MODELS = {
 export const VERIFIED_GEMINI_MODELS = [
   'gemini-3.8-flash',
   'gemini-3.7-flash',
-  'gemini-3.8-live',
   'gemini-2.5-flash',
-  'gemini-2.0-flash'
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro'
 ];
 
 const REQUEST_TIMEOUT_MS = 35000;
@@ -125,7 +129,10 @@ export async function getLlmConfig() {
     chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], (res) => {
       const apiKey = (res.qursor_api_key || '').trim();
       const provider = res.qursor_llm_provider || detectProvider(apiKey);
-      const model = res.qursor_llm_model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL;
+      let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL;
+      if (model === 'gemini-3.8-live') {
+        model = DEFAULT_GEMINI_MODEL;
+      }
       resolve({
         apiKey,
         provider,
@@ -146,7 +153,10 @@ export async function getLlmConfig() {
 export async function saveLlmConfig(apiKey, provider = null, model = null) {
   const cleanKey = (apiKey || '').trim();
   const resolvedProvider = provider || detectProvider(cleanKey);
-  const resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || DEFAULT_GEMINI_MODEL;
+  let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || DEFAULT_GEMINI_MODEL;
+  if (resolvedModel === 'gemini-3.8-live') {
+    resolvedModel = DEFAULT_GEMINI_MODEL;
+  }
 
   return new Promise((resolve) => {
     chrome.storage.sync.set({
@@ -267,10 +277,10 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
             const code = res.status;
             const detail = errData.error?.message || res.statusText || 'Unknown error';
 
-            // If 404 (model unavailable/retired) and another model exists, fall back to next model!
-            if (code === 404 && mIdx < candidateModels.length - 1) {
+            // If 404 (model unavailable/retired) OR 400 with WebSocket/bidiGenerateContent only, fall back to next model!
+            if ((code === 404 || (code === 400 && (detail.includes('WebSocket') || detail.includes('bidiGenerateContent') || detail.includes('not supported')))) && mIdx < candidateModels.length - 1) {
               const nextModel = candidateModels[mIdx + 1];
-              console.warn(`[Qursor++ LLM] Gemini model "${activeModel}" returned 404. Falling back to "${nextModel}"...`);
+              console.warn(`[Qursor++ LLM] Gemini model "${activeModel}" returned ${code} (${detail}). Automatically falling back to "${nextModel}"...`);
               clearTimeout(timeoutId);
               break;
             }
@@ -381,7 +391,7 @@ async function executeLlmRequest({ provider, model, apiKey, messages, temperatur
         }
 
         // Fast-fail on auth errors since switching models cannot fix an invalid API key
-        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403') || err.message.includes('bad request (400)'))) {
+        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403'))) {
           throw err;
         }
 
