@@ -31,7 +31,8 @@ import {
   maskApiKey,
   LLM_PROVIDERS,
   DEFAULT_MODELS,
-  DEFAULT_GEMINI_MODEL
+  DEFAULT_GEMINI_MODEL,
+  PROVIDER_FREE_MODELS
 } from '../utils/llm_service.js';
 
 export class InspectorPanel {
@@ -841,6 +842,24 @@ export class InspectorPanel {
         return;
       }
     });
+
+    // ─── Settings Provider & Model Dropdown Change Sync ───
+    this.panelContainer.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'settingsProviderSelect') {
+        const provider = e.target.value;
+        const modelSelect = this.panelContainer.querySelector('#settingsModelSelect');
+        if (modelSelect) {
+          const models = PROVIDER_FREE_MODELS[provider] || [];
+          modelSelect.innerHTML = models.map(m => 
+            `<option value="${m.id}">${m.name}</option>`
+          ).join('');
+          this.llmConfig.provider = provider;
+          this.llmConfig.model = models[0]?.id || DEFAULT_MODELS[provider] || '';
+        }
+      } else if (e.target && e.target.id === 'settingsModelSelect') {
+        this.llmConfig.model = e.target.value;
+      }
+    });
   }
 
   // ─── Theme Management ───
@@ -957,11 +976,16 @@ export class InspectorPanel {
   async _handleSaveApiKey() {
     const keyInput = this.panelContainer.querySelector('#settingsApiKeyInput');
     const providerSelect = this.panelContainer.querySelector('#settingsProviderSelect');
-    const modelInput = this.panelContainer.querySelector('#settingsModelInput');
+    const modelSelect = this.panelContainer.querySelector('#settingsModelSelect');
 
-    const key = keyInput ? keyInput.value.trim() : '';
-    const provider = providerSelect ? providerSelect.value : null;
-    const model = modelInput ? modelInput.value.trim() : null;
+    let key = keyInput ? keyInput.value.trim() : '';
+    // If input is left blank but key was already configured, preserve existing key
+    if (!key && this.llmConfig.isConfigured && this.llmConfig.apiKey) {
+      key = this.llmConfig.apiKey;
+    }
+
+    const provider = providerSelect ? providerSelect.value : (this.llmConfig.provider || LLM_PROVIDERS.GEMINI);
+    const model = modelSelect ? modelSelect.value.trim() : (this.llmConfig.model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL);
 
     if (!key) {
       this.toastManager.show('Please enter a valid API key', 'warning');
@@ -1460,17 +1484,32 @@ export class InspectorPanel {
               <div class="prop-row">
                 <span class="prop-label">Provider:</span>
                 <select id="settingsProviderSelect" class="q-select" style="flex:1;">
-                  <option value="gemini" ${this.llmConfig.provider === 'gemini' ? 'selected' : ''}>Google Gemini (Recommended)</option>
-                  <option value="openai" ${this.llmConfig.provider === 'openai' ? 'selected' : ''}>OpenAI (GPT-4o)</option>
-                  <option value="openrouter" ${this.llmConfig.provider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
-                  <option value="groq" ${this.llmConfig.provider === 'groq' ? 'selected' : ''}>Groq (Llama 3.3)</option>
+                  <option value="gemini" ${this.llmConfig.provider === 'gemini' ? 'selected' : ''}>Google Gemini (Free Tier)</option>
+                  <option value="groq" ${this.llmConfig.provider === 'groq' ? 'selected' : ''}>Groq (Free &amp; Ultra-Fast)</option>
+                  <option value="openrouter" ${this.llmConfig.provider === 'openrouter' ? 'selected' : ''}>OpenRouter (Free Models)</option>
+                  <option value="openai" ${this.llmConfig.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
                 </select>
               </div>
 
               <div class="prop-row">
                 <span class="prop-label">Model:</span>
-                <input type="text" id="settingsModelInput" class="q-input" 
-                       value="${_esc(this.llmConfig.model || DEFAULT_MODELS[this.llmConfig.provider] || DEFAULT_GEMINI_MODEL)}" />
+                <select id="settingsModelSelect" class="q-select" style="flex:1;">
+                  ${(() => {
+                    const currentProvider = this.llmConfig.provider || 'gemini';
+                    const models = PROVIDER_FREE_MODELS[currentProvider] || [];
+                    const currentModel = this.llmConfig.model || DEFAULT_MODELS[currentProvider] || DEFAULT_GEMINI_MODEL;
+                    const hasCurrent = models.some(m => m.id === currentModel);
+                    let optionsHtml = models.map(m => `
+                      <option value="${_esc(m.id)}" ${(currentModel === m.id) ? 'selected' : ''}>
+                        ${_esc(m.name)}
+                      </option>
+                    `).join('');
+                    if (!hasCurrent && currentModel) {
+                      optionsHtml = `<option value="${_esc(currentModel)}" selected>${_esc(currentModel)} (Custom)</option>` + optionsHtml;
+                    }
+                    return optionsHtml;
+                  })()}
+                </select>
               </div>
             </div>
 

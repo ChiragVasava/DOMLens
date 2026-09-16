@@ -13,21 +13,52 @@ export const LLM_PROVIDERS = {
   GROQ: 'groq'
 };
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
+
+export const PROVIDER_FREE_MODELS = {
+  [LLM_PROVIDERS.GEMINI]: [
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Free Tier - Recommended)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Free Tier - High Quality)' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (Free Tier - Fast)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Free Tier - High Context)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Free Tier - Complex Tasks)' }
+  ],
+  [LLM_PROVIDERS.GROQ]: [
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (Free - High Speed)' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Free - Ultra Fast)' },
+    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Free - 32k Context)' },
+    { id: 'gemma2-9b-it', name: 'Gemma 2 9B IT (Free - Google Gemma)' },
+    { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B (Free - Reasoning)' }
+  ],
+  [LLM_PROVIDERS.OPENROUTER]: [
+    { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash Exp (Free / $0)' },
+    { id: 'google/gemini-2.0-flash-thinking-exp:free', name: 'Gemini 2.0 Flash Thinking (Free / $0)' },
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Instruct (Free / $0)' },
+    { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B Instruct (Free / $0)' },
+    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free / $0)' },
+    { id: 'qwen/qwen-2.5-coder-32b-instruct:free', name: 'Qwen 2.5 Coder 32B (Free / $0)' },
+    { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B Instruct (Free / $0)' }
+  ],
+  [LLM_PROVIDERS.OPENAI]: [
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini (Fast & Cost Efficient / Free Trial)' },
+    { id: 'gpt-4o', name: 'GPT-4o (Flagship Multimodal)' },
+    { id: 'o3-mini', name: 'o3-mini (High Speed Reasoning)' }
+  ]
+};
 
 export const DEFAULT_MODELS = {
-  [LLM_PROVIDERS.GEMINI]: DEFAULT_GEMINI_MODEL,
+  [LLM_PROVIDERS.GEMINI]: 'gemini-2.0-flash',
   [LLM_PROVIDERS.OPENAI]: 'gpt-4o-mini',
-  [LLM_PROVIDERS.OPENROUTER]: 'google/gemini-2.0-flash-001',
+  [LLM_PROVIDERS.OPENROUTER]: 'google/gemini-2.0-flash-exp:free',
   [LLM_PROVIDERS.GROQ]: 'llama-3.3-70b-versatile'
 };
 
 export const VERIFIED_GEMINI_MODELS = [
-  'gemini-3.8-flash',
   'gemini-2.0-flash',
   'gemini-2.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-pro-latest'
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro'
 ];
 
 const REQUEST_TIMEOUT_MS = 35000;
@@ -96,8 +127,7 @@ export async function getLlmConfig() {
       const apiKey = (res.qursor_api_key || '').trim();
       const provider = res.qursor_llm_provider || detectProvider(apiKey);
       let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL;
-      // Upgrade obsolete or superseded models to latest stable Flash model
-      if (model.includes('1.5') || model === 'gemini-2.0-flash' || model === 'gemini-2.5-flash' || model === 'gemini-3.6-flash') {
+      if (model === 'gemini-3.8-flash') {
         model = DEFAULT_GEMINI_MODEL;
       }
       resolve({
@@ -121,7 +151,7 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
   const cleanKey = (apiKey || '').trim();
   const resolvedProvider = provider || detectProvider(cleanKey);
   let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || DEFAULT_GEMINI_MODEL;
-  if (resolvedModel.includes('1.5') || resolvedModel === 'gemini-2.0-flash' || resolvedModel === 'gemini-2.5-flash' || resolvedModel === 'gemini-3.6-flash') {
+  if (resolvedModel === 'gemini-3.8-flash') {
     resolvedModel = DEFAULT_GEMINI_MODEL;
   }
 
