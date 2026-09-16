@@ -21,13 +21,15 @@ import { generateComponentCode, CODE_FORMATS } from '../utils/component_generato
 import { extractElementAssets, filterAssets } from '../utils/asset_extractor.js';
 import { ComponentState } from '../utils/component_state.js';
 import { buildLivePreviewDoc } from '../utils/preview_renderer.js';
-import { detectSimpleTextEdit } from '../utils/text_editor.js';
+import { detectSimpleTextEdit, detectSimpleStyleEdit } from '../utils/text_editor.js';
 import {
   callLlmEditComponent,
   callLlmGenerateReact,
   getLlmConfig,
   saveLlmConfig,
   clearLlmConfig,
+  switchLlmProvider,
+  detectProvider,
   maskApiKey,
   LLM_PROVIDERS,
   DEFAULT_MODELS,
@@ -849,20 +851,34 @@ export class InspectorPanel {
     });
 
     // ─── Settings Provider & Model Dropdown Change Sync ───
-    this.panelContainer.addEventListener('change', (e) => {
+    this.panelContainer.addEventListener('change', async (e) => {
       if (e.target && e.target.id === 'settingsProviderSelect') {
         const provider = e.target.value;
-        const modelSelect = this.panelContainer.querySelector('#settingsModelSelect');
-        if (modelSelect) {
-          const models = PROVIDER_FREE_MODELS[provider] || [];
-          modelSelect.innerHTML = models.map(m => 
-            `<option value="${m.id}">${m.name}</option>`
-          ).join('');
-          this.llmConfig.provider = provider;
-          this.llmConfig.model = models[0]?.id || DEFAULT_MODELS[provider] || '';
-        }
+        const switched = await switchLlmProvider(provider);
+        this.llmConfig = switched;
+        this.toastManager.show(`Switched provider to ${provider.toUpperCase()}`, 'info');
+        this.renderTabContent();
       } else if (e.target && e.target.id === 'settingsModelSelect') {
-        this.llmConfig.model = e.target.value;
+        const model = e.target.value;
+        this.llmConfig.model = model;
+        await saveLlmConfig(this.llmConfig.apiKey, this.llmConfig.provider, model);
+        this.toastManager.show(`Model: ${model}`, 'info');
+      }
+    });
+
+    // Auto-detect provider if user pastes a recognized API key prefix (e.g. gsk_ for Groq, AIza for Gemini)
+    this.panelContainer.addEventListener('input', (e) => {
+      if (e.target && e.target.id === 'settingsApiKeyInput') {
+        const key = e.target.value.trim();
+        const detected = detectProvider(key);
+        const providerSelect = this.panelContainer.querySelector('#settingsProviderSelect');
+        if (providerSelect && detected !== providerSelect.value && key.length >= 8) {
+          providerSelect.value = detected;
+          switchLlmProvider(detected).then(switched => {
+            this.llmConfig = switched;
+            this.renderTabContent();
+          });
+        }
       }
     });
   }
@@ -908,12 +924,21 @@ export class InspectorPanel {
       return;
     }
 
-    // Fast-path: Deterministic text edit check (Section 19 compliance)
+    // Fast-path 1: Deterministic text edit check (Section 19 compliance)
     // Avoids unnecessary API latency, eliminates 503 errors, and guarantees 100% CSS preservation
     const simpleEdit = detectSimpleTextEdit(instruction, this.state.current.html);
     if (simpleEdit) {
       this.state.updateCurrent(simpleEdit.html, this.state.current.css, simpleEdit.changes);
       this.toastManager.show('✓ Text updated instantly!', 'success');
+      this.renderTabContent();
+      return;
+    }
+
+    // Fast-path 2: Deterministic style edit check (instant background, color, padding, radius, font size)
+    const styleEdit = detectSimpleStyleEdit(instruction, this.state.current.html, this.state.current.css);
+    if (styleEdit) {
+      this.state.updateCurrent(styleEdit.html, styleEdit.css, styleEdit.changes);
+      this.toastManager.show('✓ Style updated instantly!', 'success');
       this.renderTabContent();
       return;
     }
@@ -1011,31 +1036,33 @@ export class InspectorPanel {
     const providerSelect = this.panelContainer.querySelector('#settingsProviderSelect');
     const modelSelect = this.panelContainer.querySelector('#settingsModelSelect');
 
-    let key = keyInput ? keyInput.value.trim() : '';
-    // If input is left blank but key was already configured, preserve existing key
-    if (!key && this.llmConfig.isConfigured && this.llmConfig.apiKey) {
-      key = this.llmConfig.apiKey;
-    }
-
     const provider = providerSelect ? providerSelect.value : (this.llmConfig.provider || LLM_PROVIDERS.GEMINI);
     const model = modelSelect ? modelSelect.value.trim() : (this.llmConfig.model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL);
 
+    let key = keyInput ? keyInput.value.trim() : '';
+    // If input is left blank, check if a key was previously configured for this provider
+    if (!key && this.llmConfig.apiKeys && this.llmConfig.apiKeys[provider]) {
+      key = this.llmConfig.apiKeys[provider];
+    } else if (!key && this.llmConfig.isConfigured && this.llmConfig.apiKey && this.llmConfig.provider === provider) {
+      key = this.llmConfig.apiKey;
+    }
+
     if (!key) {
-      this.toastManager.show('Please enter a valid API key', 'warning');
+      this.toastManager.show(`Please enter an API key for ${provider.toUpperCase()}`, 'warning');
       return;
     }
 
     const saved = await saveLlmConfig(key, provider, model);
     this.llmConfig = saved;
-    this.toastManager.show('✓ API key and configuration saved!', 'success');
+    this.toastManager.show(`✓ Saved configuration for ${provider.toUpperCase()} (${model})!`, 'success');
     this.renderTabContent();
   }
 
   async _handleClearApiKey() {
-    if (!confirm('Are you sure you want to clear the configured API key?')) return;
-    await clearLlmConfig();
-    this.llmConfig = { apiKey: '', provider: LLM_PROVIDERS.GEMINI, model: DEFAULT_MODELS[LLM_PROVIDERS.GEMINI], isConfigured: false };
-    this.toastManager.show('API key cleared', 'info');
+    if (!confirm('Are you sure you want to clear the configured API key for this provider?')) return;
+    await clearLlmConfig(this.llmConfig.provider);
+    this.llmConfig = await getLlmConfig(this.llmConfig.provider);
+    this.toastManager.show('API key cleared for active provider', 'info');
     this.renderTabContent();
   }
 
@@ -1501,15 +1528,26 @@ export class InspectorPanel {
       // ══════════════════════════════════════════════
       case 'settings': {
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>⚙️ Extension Settings &amp; AI Configuration</span></div>`;
-        const maskedKey = maskApiKey(this.llmConfig.apiKey);
+        const activeProvider = this.llmConfig.provider || LLM_PROVIDERS.GEMINI;
+        const keyForActiveProvider = this.llmConfig.apiKey || (this.llmConfig.apiKeys && this.llmConfig.apiKeys[activeProvider]) || '';
+        const isConfiguredForProvider = !!keyForActiveProvider;
+        const maskedKey = maskApiKey(keyForActiveProvider);
+
+        const providerPlaceholders = {
+          gemini: 'Enter Gemini API key (AIza...)',
+          groq: 'Enter Groq API key (gsk_...) - Free & Ultra-Fast',
+          openrouter: 'Enter OpenRouter API key (sk-or-...)',
+          openai: 'Enter OpenAI API key (sk-...)'
+        };
+        const activePlaceholder = isConfiguredForProvider ? maskedKey : (providerPlaceholders[activeProvider] || 'Enter your API key...');
 
         body.innerHTML = `
           <!-- AI Configuration Card -->
           <div class="qursor-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
               <span style="font-weight:700;font-size:12px;color:var(--q-text-primary);">AI Configuration</span>
-              <span class="status-pill-badge ${this.llmConfig.isConfigured ? 'configured' : 'not-configured'}">
-                ${this.llmConfig.isConfigured ? '● Configured' : '○ Not Configured'}
+              <span class="status-pill-badge ${isConfiguredForProvider ? 'configured' : 'not-configured'}">
+                ${isConfiguredForProvider ? '● Configured' : '○ Not Configured'}
               </span>
             </div>
             <div style="font-size:10px;color:var(--q-text-muted);margin-bottom:6px;">
@@ -1518,20 +1556,20 @@ export class InspectorPanel {
 
             <div class="prop-grid">
               <div class="prop-row">
-                <span class="prop-label">API Key:</span>
-                <input type="password" id="settingsApiKeyInput" class="q-input" 
-                       placeholder="${this.llmConfig.isConfigured ? maskedKey : 'Enter your API key...'}" 
-                       value="" />
+                <span class="prop-label">Provider:</span>
+                <select id="settingsProviderSelect" class="q-select" style="flex:1;">
+                  <option value="gemini" ${activeProvider === 'gemini' ? 'selected' : ''}>Google Gemini (Free Tier)</option>
+                  <option value="groq" ${activeProvider === 'groq' ? 'selected' : ''}>Groq (Free &amp; Ultra-Fast)</option>
+                  <option value="openrouter" ${activeProvider === 'openrouter' ? 'selected' : ''}>OpenRouter (Free Models)</option>
+                  <option value="openai" ${activeProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
+                </select>
               </div>
 
               <div class="prop-row">
-                <span class="prop-label">Provider:</span>
-                <select id="settingsProviderSelect" class="q-select" style="flex:1;">
-                  <option value="gemini" ${this.llmConfig.provider === 'gemini' ? 'selected' : ''}>Google Gemini (Free Tier)</option>
-                  <option value="groq" ${this.llmConfig.provider === 'groq' ? 'selected' : ''}>Groq (Free &amp; Ultra-Fast)</option>
-                  <option value="openrouter" ${this.llmConfig.provider === 'openrouter' ? 'selected' : ''}>OpenRouter (Free Models)</option>
-                  <option value="openai" ${this.llmConfig.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-                </select>
+                <span class="prop-label">API Key:</span>
+                <input type="password" id="settingsApiKeyInput" class="q-input" 
+                       placeholder="${_esc(activePlaceholder)}" 
+                       value="" />
               </div>
 
               <div class="prop-row">

@@ -120,38 +120,54 @@ export function maskApiKey(key) {
  * Retrieves the stored API key and LLM configuration from chrome.storage.sync
  * @returns {Promise<{ apiKey: string, provider: string, model: string, isConfigured: boolean }>}
  */
-export async function getLlmConfig() {
+export async function getLlmConfig(targetProvider = null) {
   if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
     return {
       apiKey: '',
       provider: LLM_PROVIDERS.GEMINI,
       model: DEFAULT_GEMINI_MODEL,
-      isConfigured: false
+      isConfigured: false,
+      apiKeys: {}
     };
   }
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], (res) => {
-      const apiKey = (res.qursor_api_key || '').trim();
-      const provider = res.qursor_llm_provider || detectProvider(apiKey);
-      let model = res.qursor_llm_model || DEFAULT_MODELS[provider] || DEFAULT_GEMINI_MODEL;
+    chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model', 'qursor_api_keys'], (res) => {
+      const apiKeys = res.qursor_api_keys || {};
+      const legacyKey = (res.qursor_api_key || '').trim();
+      if (legacyKey && Object.keys(apiKeys).length === 0) {
+        const detected = detectProvider(legacyKey);
+        apiKeys[detected] = legacyKey;
+      }
+
+      const activeProvider = targetProvider || res.qursor_llm_provider || LLM_PROVIDERS.GEMINI;
+      let activeKey = (apiKeys[activeProvider] || (detectProvider(legacyKey) === activeProvider ? legacyKey : '')).trim();
+
+      const validModels = (PROVIDER_FREE_MODELS[activeProvider] || []).map(m => m.id);
+      let model = res.qursor_llm_model;
+      if (!model || !validModels.includes(model)) {
+        model = DEFAULT_MODELS[activeProvider] || validModels[0] || DEFAULT_GEMINI_MODEL;
+      }
+
       if (
-        provider === LLM_PROVIDERS.GEMINI &&
+        activeProvider === LLM_PROVIDERS.GEMINI &&
         (model.includes('1.5') || model.includes('2.0') || model.includes('2.5') || model.includes('live'))
       ) {
         model = DEFAULT_GEMINI_MODEL;
       }
+
       resolve({
-        apiKey,
-        provider,
+        apiKey: activeKey,
+        provider: activeProvider,
         model,
-        isConfigured: !!apiKey
+        isConfigured: !!activeKey,
+        apiKeys
       });
     });
   });
 }
 
 /**
- * Persists the API key and LLM configuration to chrome.storage.sync
+ * Persists the API key and LLM configuration to chrome.storage.sync per provider
  * @param {string} apiKey 
  * @param {string|null} [provider=null] 
  * @param {string|null} [model=null] 
@@ -159,8 +175,15 @@ export async function getLlmConfig() {
  */
 export async function saveLlmConfig(apiKey, provider = null, model = null) {
   const cleanKey = (apiKey || '').trim();
-  const resolvedProvider = provider || detectProvider(cleanKey);
-  let resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || DEFAULT_GEMINI_MODEL;
+  const currentConfig = await getLlmConfig(provider);
+  const resolvedProvider = provider || (cleanKey ? detectProvider(cleanKey) : currentConfig.provider) || LLM_PROVIDERS.GEMINI;
+
+  const validModels = (PROVIDER_FREE_MODELS[resolvedProvider] || []).map(m => m.id);
+  let resolvedModel = model || currentConfig.model;
+  if (!resolvedModel || !validModels.includes(resolvedModel)) {
+    resolvedModel = DEFAULT_MODELS[resolvedProvider] || validModels[0] || DEFAULT_GEMINI_MODEL;
+  }
+
   if (
     resolvedProvider === LLM_PROVIDERS.GEMINI &&
     (resolvedModel.includes('1.5') || resolvedModel.includes('2.0') || resolvedModel.includes('2.5') || resolvedModel.includes('live'))
@@ -168,41 +191,92 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
     resolvedModel = DEFAULT_GEMINI_MODEL;
   }
 
+  const updatedKeys = { ...(currentConfig.apiKeys || {}) };
+  if (cleanKey) {
+    updatedKeys[resolvedProvider] = cleanKey;
+  }
+
+  const effectiveKey = cleanKey || updatedKeys[resolvedProvider] || '';
+
   if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
     return {
-      apiKey: cleanKey,
+      apiKey: effectiveKey,
       provider: resolvedProvider,
       model: resolvedModel,
-      isConfigured: !!cleanKey
+      isConfigured: !!effectiveKey,
+      apiKeys: updatedKeys
     };
   }
 
   return new Promise((resolve) => {
     chrome.storage.sync.set({
-      qursor_api_key: cleanKey,
+      qursor_api_key: effectiveKey,
       qursor_llm_provider: resolvedProvider,
-      qursor_llm_model: resolvedModel
+      qursor_llm_model: resolvedModel,
+      qursor_api_keys: updatedKeys
     }, () => {
       resolve({
-        apiKey: cleanKey,
+        apiKey: effectiveKey,
         provider: resolvedProvider,
         model: resolvedModel,
-        isConfigured: !!cleanKey
+        isConfigured: !!effectiveKey,
+        apiKeys: updatedKeys
       });
     });
   });
 }
 
 /**
- * Clears stored API key and resets configuration
+ * Switches the active provider and model in storage and loads the stored key for that provider
+ * @param {string} provider 
+ * @param {string|null} [model=null] 
+ * @returns {Promise<Object>}
+ */
+export async function switchLlmProvider(provider, model = null) {
+  const currentConfig = await getLlmConfig(provider);
+  const resolvedProvider = provider || LLM_PROVIDERS.GEMINI;
+  const validModels = (PROVIDER_FREE_MODELS[resolvedProvider] || []).map(m => m.id);
+  const resolvedModel = model || DEFAULT_MODELS[resolvedProvider] || validModels[0] || '';
+  const apiKey = (currentConfig.apiKeys && currentConfig.apiKeys[resolvedProvider]) || '';
+
+  if (typeof chrome !== 'undefined' && chrome?.storage?.sync) {
+    await new Promise((resolve) => {
+      chrome.storage.sync.set({
+        qursor_llm_provider: resolvedProvider,
+        qursor_llm_model: resolvedModel,
+        qursor_api_key: apiKey
+      }, resolve);
+    });
+  }
+
+  return {
+    apiKey,
+    provider: resolvedProvider,
+    model: resolvedModel,
+    isConfigured: !!apiKey,
+    apiKeys: currentConfig.apiKeys || {}
+  };
+}
+
+/**
+ * Clears stored API key for the active provider and resets configuration
+ * @param {string|null} [provider=null]
  * @returns {Promise<boolean>}
  */
-export async function clearLlmConfig() {
+export async function clearLlmConfig(provider = null) {
+  const config = await getLlmConfig(provider);
+  const activeProvider = provider || config.provider;
+  const updatedKeys = { ...(config.apiKeys || {}) };
+  delete updatedKeys[activeProvider];
+
   if (typeof chrome === 'undefined' || !chrome?.storage?.sync) {
     return true;
   }
   return new Promise((resolve) => {
-    chrome.storage.sync.remove(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model'], () => {
+    chrome.storage.sync.set({
+      qursor_api_key: '',
+      qursor_api_keys: updatedKeys
+    }, () => {
       resolve(true);
     });
   });
@@ -611,15 +685,20 @@ CRITICAL EDIT PRINCIPLES:
 2. PRESERVE EVERYTHING that the user did not explicitly request to change.
 3. Modify ONLY what is necessary to satisfy the user's instruction.
 4. DO NOT change dimensions, typography, spacing, layout, colors, assets, or structure unless the user's instruction requires it.
-5. If the user instruction only changes text, DO NOT change any CSS rules.
-6. Return your response as a strict JSON object matching this schema:
+5. STYLE EDITING REQUIREMENT:
+   - When modifying colors, background, padding, layout, fonts, borders, or any visual styles:
+     Apply style updates directly via inline style attributes on the affected HTML elements using !important to guarantee precedence:
+     e.g. style="background-color: #2563eb !important; color: #ffffff !important;"
+   - Also return updated CSS rules in the "css" property.
+6. If the user instruction only changes text, DO NOT change any CSS rules.
+7. Return your response as a strict JSON object matching this schema:
    {
      "html": "<complete updated HTML>",
      "css": "<complete updated CSS>",
      "changes": ["<concise description of each applied change>"]
    }
-7. Return clean standards-compliant HTML and CSS. Single root element matching inspected element.
-8. No markdown code blocks outside JSON. No explanatory preamble.`;
+8. Return clean standards-compliant HTML and CSS. Single root element matching inspected element.
+9. No markdown code blocks outside JSON. No explanatory preamble.`;
 
   const tag = elementData?.tag || 'element';
   // Context optimization (Section 8): Do not send giant stylesheets that overflow token limits
@@ -688,17 +767,32 @@ Return the complete updated component JSON:`;
     throw new Error('LLM response was missing valid HTML markup. The previous component has been preserved.');
   }
 
-  // Diff-based Safety (Section 10 & 11):
-  // If the instruction only asked to change text, keep existing CSS byte-for-byte
+  // Diff-based Safety & Style Preservation:
   const lower = instruction.toLowerCase();
-  const isStyleEdit = ['background', 'bg', 'color', 'padding', 'margin', 'border', 'font', 'size', 'width', 'height', 'radius', 'shadow', 'display'].some(k => lower.includes(k));
-  let finalCss = typeof parsed.css === 'string' ? parsed.css.trim() : '';
-  if (!isStyleEdit && currentCss) {
-    finalCss = currentCss;
+  const isStyleEdit = ['background', 'bg', 'color', 'padding', 'margin', 'border', 'font', 'size', 'width', 'height', 'radius', 'shadow', 'display', 'round', 'corner'].some(k => lower.includes(k));
+
+  let finalCss = currentCss;
+  if (typeof parsed.css === 'string' && parsed.css.trim().length > 0) {
+    if (parsed.css.trim().length > 250 || !currentCss) {
+      finalCss = parsed.css.trim();
+    } else {
+      // Merge concise model styles with existing base CSS so layout is not destroyed
+      finalCss = `${currentCss}\n\n/* AI Applied Style Modification */\n${parsed.css.trim()}`;
+    }
+  }
+
+  // Ensure root/element inline styles added by model have !important to override base stylesheets
+  let finalHtml = parsed.html.trim();
+  if (isStyleEdit && finalHtml.includes('style=')) {
+    finalHtml = finalHtml.replace(/style=(["'])(.*?)\1/gi, (match, quote, styleContent) => {
+      const decls = styleContent.split(';').map(d => d.trim()).filter(Boolean);
+      const reinforced = decls.map(d => d.includes('!important') ? d : `${d} !important`).join('; ');
+      return `style=${quote}${reinforced};${quote}`;
+    });
   }
 
   return {
-    html: parsed.html.trim(),
+    html: finalHtml,
     css: finalCss,
     changes: Array.isArray(parsed.changes) ? parsed.changes : ['Applied user modifications']
   };
