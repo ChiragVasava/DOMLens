@@ -180,147 +180,226 @@ export async function clearLlmConfig() {
 // Core HTTP Fetch with Timeout, Schema Support & Error Normalization
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * Resolves candidate fallback models in priority order for the given provider.
+ * Begins with the user-selected primary model, followed by all other verified free models for that provider.
+ * @param {string} provider 
+ * @param {string} primaryModel 
+ * @returns {string[]} Ordered list of unique model IDs to try
+ */
+export function getFallbackModels(provider, primaryModel) {
+  const modelList = (PROVIDER_FREE_MODELS[provider] || []).map(m => m.id);
+  const candidates = [primaryModel, ...modelList.filter(id => id !== primaryModel)];
+  return [...new Set(candidates.filter(Boolean))];
+}
+
 async function executeLlmRequest({ provider, model, apiKey, messages, temperature = 0.2, jsonMode = false }) {
-  const MAX_RETRIES = 3;
-  let attempt = 0;
+  const candidateModels = getFallbackModels(provider, model);
+  let lastError = null;
 
-  while (attempt <= MAX_RETRIES) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+    const activeModel = candidateModels[mIdx];
+    let attempt = 0;
+    const MAX_RETRIES_PER_MODEL = 1;
 
-    try {
-      if (provider === LLM_PROVIDERS.GEMINI) {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const systemMsg = messages.find(m => m.role === 'system')?.content || '';
-        const userMsg = messages.find(m => m.role === 'user')?.content || '';
-        const combinedText = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
+    while (attempt <= MAX_RETRIES_PER_MODEL) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-        const bodyPayload = {
-          contents: [{ parts: [{ text: combinedText }] }],
-          generationConfig: {
-            temperature,
-            maxOutputTokens: 8192
-          }
-        };
+      try {
+        if (provider === LLM_PROVIDERS.GEMINI) {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey}`;
+          const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+          const userMsg = messages.find(m => m.role === 'user')?.content || '';
+          const combinedText = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
 
-        if (jsonMode) {
-          bodyPayload.generationConfig.responseMimeType = 'application/json';
-          bodyPayload.generationConfig.responseSchema = {
-            type: 'OBJECT',
-            properties: {
-              html: { type: 'STRING' },
-              css: { type: 'STRING' },
-              changes: {
-                type: 'ARRAY',
-                items: { type: 'STRING' }
-              }
-            },
-            required: ['html', 'css', 'changes']
+          const bodyPayload = {
+            contents: [{ parts: [{ text: combinedText }] }],
+            generationConfig: {
+              temperature,
+              maxOutputTokens: 8192
+            }
           };
-        }
 
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bodyPayload),
-          signal: controller.signal
-        });
-
-        // Exponential backoff for 503 (server capacity) and 429 (rate limit)
-        if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES) {
-          attempt++;
-          const backoffDelay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
-          console.warn(`[Qursor++ LLM] Gemini server returned ${res.status}. Retrying in ${backoffDelay}ms (attempt ${attempt}/${MAX_RETRIES})...`);
-          clearTimeout(timeoutId);
-          await new Promise(resolve => setTimeout(resolve, backoffDelay));
-          continue;
-        }
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const code = res.status;
-          const detail = errData.error?.message || res.statusText || 'Unknown error';
-
-          if (code === 404) {
-            throw new Error(`Configured Gemini model (${model}) is unavailable. Please select a supported model in Settings.`);
-          } else if (code === 401 || code === 403) {
-            throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
-          } else if (code === 429) {
-            throw new Error('Gemini API rate limit exceeded (429). Please wait a moment before trying again.');
-          } else if (code === 503 || code === 500) {
-            throw new Error('Gemini is temporarily unavailable. Your previous component was preserved.');
-          } else if (code === 400) {
-            throw new Error(`Gemini API bad request (400): ${detail}`);
-          } else {
-            throw new Error(`Gemini API Error (${code}): ${detail}`);
+          if (jsonMode) {
+            bodyPayload.generationConfig.responseMimeType = 'application/json';
+            bodyPayload.generationConfig.responseSchema = {
+              type: 'OBJECT',
+              properties: {
+                html: { type: 'STRING' },
+                css: { type: 'STRING' },
+                changes: {
+                  type: 'ARRAY',
+                  items: { type: 'STRING' }
+                }
+              },
+              required: ['html', 'css', 'changes']
+            };
           }
-        }
 
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) throw new Error('Received empty response from Gemini API.');
-        return rawText.trim();
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyPayload),
+            signal: controller.signal
+          });
 
-    } else {
-      // OpenAI, OpenRouter, Groq
-      let endpoint = 'https://api.openai.com/v1/chat/completions';
-      if (provider === LLM_PROVIDERS.OPENROUTER) {
-        endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-      } else if (provider === LLM_PROVIDERS.GROQ) {
-        endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-      }
+          // If 503 (server capacity/model overloaded) or 500: Try next model in fallback list!
+          if ((res.status === 503 || res.status === 500) && mIdx < candidateModels.length - 1) {
+            const nextModel = candidateModels[mIdx + 1];
+            console.warn(`[Qursor++ LLM] Gemini model "${activeModel}" returned ${res.status} (overloaded). Automatically falling back to "${nextModel}"...`);
+            clearTimeout(timeoutId);
+            break; // Break retry loop to try the fallback model immediately
+          }
 
-      const reqBody = {
-        model,
-        messages,
-        temperature
-      };
+          // Backoff retry on same model if rate-limited (429) or transient 503 on the final fallback
+          if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES_PER_MODEL) {
+            attempt++;
+            const backoffDelay = 1500;
+            console.warn(`[Qursor++ LLM] Gemini server returned ${res.status} on "${activeModel}". Retrying in ${backoffDelay}ms...`);
+            clearTimeout(timeoutId);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            continue;
+          }
 
-      if (jsonMode && (provider === LLM_PROVIDERS.OPENAI || provider === LLM_PROVIDERS.GROQ)) {
-        reqBody.response_format = { type: 'json_object' };
-      }
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const code = res.status;
+            const detail = errData.error?.message || res.statusText || 'Unknown error';
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(reqBody),
-        signal: controller.signal
-      });
+            // If 404 (model unavailable/retired) and another model exists, fall back to next model!
+            if (code === 404 && mIdx < candidateModels.length - 1) {
+              const nextModel = candidateModels[mIdx + 1];
+              console.warn(`[Qursor++ LLM] Gemini model "${activeModel}" returned 404. Falling back to "${nextModel}"...`);
+              clearTimeout(timeoutId);
+              break;
+            }
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const code = res.status;
-        const detail = errData.error?.message || res.statusText || 'Unknown error';
+            if (code === 404) {
+              throw new Error(`Configured Gemini model (${activeModel}) is unavailable. Please select a supported model in Settings.`);
+            } else if (code === 401 || code === 403) {
+              throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
+            } else if (code === 429) {
+              throw new Error('Gemini API rate limit exceeded (429). Please wait a moment before trying again.');
+            } else if (code === 503 || code === 500) {
+              throw new Error('Gemini is temporarily unavailable across all fallback models. Your previous component was preserved.');
+            } else if (code === 400) {
+              throw new Error(`Gemini API bad request (400): ${detail}`);
+            } else {
+              throw new Error(`Gemini API Error (${code}): ${detail}`);
+            }
+          }
 
-        if (code === 401 || code === 403) {
-          throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
-        } else if (code === 429) {
-          throw new Error(`Rate limit exceeded on ${provider.toUpperCase()}. Please wait before retrying.`);
-        } else if (code === 503 || code === 500) {
-          throw new Error(`${provider.toUpperCase()} service temporarily unavailable (${code}). Please retry shortly.`);
+          const data = await res.json();
+          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('Received empty response from Gemini API.');
+          return rawText.trim();
+
         } else {
-          throw new Error(`${provider.toUpperCase()} API Error (${code}): ${detail}`);
-        }
-      }
+          // OpenAI, OpenRouter, Groq
+          let endpoint = 'https://api.openai.com/v1/chat/completions';
+          if (provider === LLM_PROVIDERS.OPENROUTER) {
+            endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+          } else if (provider === LLM_PROVIDERS.GROQ) {
+            endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+          }
 
-      const data = await res.json();
-      const rawText = data.choices?.[0]?.message?.content;
-      if (!rawText) throw new Error(`Received empty response from ${provider.toUpperCase()}.`);
-      return rawText.trim();
+          const reqBody = {
+            model: activeModel,
+            messages,
+            temperature
+          };
+
+          if (jsonMode && (provider === LLM_PROVIDERS.OPENAI || provider === LLM_PROVIDERS.GROQ)) {
+            reqBody.response_format = { type: 'json_object' };
+          }
+
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(reqBody),
+            signal: controller.signal
+          });
+
+          // If 503 or 500 on OpenAI / OpenRouter / Groq, fall back to next model
+          if ((res.status === 503 || res.status === 500) && mIdx < candidateModels.length - 1) {
+            const nextModel = candidateModels[mIdx + 1];
+            console.warn(`[Qursor++ LLM] ${provider.toUpperCase()} model "${activeModel}" returned ${res.status}. Automatically falling back to "${nextModel}"...`);
+            clearTimeout(timeoutId);
+            break;
+          }
+
+          if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES_PER_MODEL) {
+            attempt++;
+            const backoffDelay = 1500;
+            console.warn(`[Qursor++ LLM] ${provider.toUpperCase()} server returned ${res.status} on "${activeModel}". Retrying in ${backoffDelay}ms...`);
+            clearTimeout(timeoutId);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            continue;
+          }
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const code = res.status;
+            const detail = errData.error?.message || res.statusText || 'Unknown error';
+
+            if (code === 404 && mIdx < candidateModels.length - 1) {
+              const nextModel = candidateModels[mIdx + 1];
+              console.warn(`[Qursor++ LLM] ${provider.toUpperCase()} model "${activeModel}" returned 404. Falling back to "${nextModel}"...`);
+              clearTimeout(timeoutId);
+              break;
+            }
+
+            if (code === 401 || code === 403) {
+              throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
+            } else if (code === 429) {
+              throw new Error(`Rate limit exceeded on ${provider.toUpperCase()}. Please wait before retrying.`);
+            } else if (code === 503 || code === 500) {
+              throw new Error(`${provider.toUpperCase()} service temporarily unavailable (${code}). Please retry shortly.`);
+            } else {
+              throw new Error(`${provider.toUpperCase()} API Error (${code}): ${detail}`);
+            }
+          }
+
+          const data = await res.json();
+          const rawText = data.choices?.[0]?.message?.content;
+          if (!rawText) throw new Error(`Received empty response from ${provider.toUpperCase()}.`);
+          return rawText.trim();
+        }
+      } catch (err) {
+        lastError = err;
+        if (err.name === 'AbortError') {
+          if (mIdx < candidateModels.length - 1) {
+            console.warn(`[Qursor++ LLM] Model "${activeModel}" timed out. Falling back to "${candidateModels[mIdx + 1]}"...`);
+            clearTimeout(timeoutId);
+            break;
+          }
+          throw new Error('LLM request timed out after 35 seconds. Check your network or provider status.');
+        }
+
+        // Fast-fail on auth errors since switching models cannot fix an invalid API key
+        if (err.message && (err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('403') || err.message.includes('bad request (400)'))) {
+          throw err;
+        }
+
+        if (mIdx < candidateModels.length - 1) {
+          console.warn(`[Qursor++ LLM] Error with "${activeModel}": ${err.message}. Trying fallback "${candidateModels[mIdx + 1]}"...`);
+          clearTimeout(timeoutId);
+          break;
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      attempt++;
     }
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      throw new Error('LLM request timed out after 35 seconds. Check your network or provider status.');
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
   }
-    attempt++;
-  }
+
+  if (lastError) throw lastError;
+  throw new Error('All model endpoints failed to respond.');
 }
 
 // ─────────────────────────────────────────────────────────────────
