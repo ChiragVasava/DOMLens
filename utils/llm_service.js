@@ -31,9 +31,9 @@ export const PROVIDER_FREE_MODELS = {
   ],
   [LLM_PROVIDERS.OPENROUTER]: [
     { id: 'openrouter/free', name: 'OpenRouter Free Router (Auto Best Free Model - Recommended)' },
-    { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash Exp (Free / $0)' },
     { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Instruct (Free / $0)' },
-    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free / $0)' },
+    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 Reasoning (Free / $0)' },
+    { id: 'deepseek/deepseek-chat:free', name: 'DeepSeek V3 Chat (Free / $0)' },
     { id: 'qwen/qwen-2.5-coder-32b-instruct:free', name: 'Qwen 2.5 Coder 32B (Free / $0)' }
   ],
   [LLM_PROVIDERS.OPENAI]: [
@@ -59,7 +59,7 @@ export const VERIFIED_GEMINI_MODELS = [
   'gemini-3.5-flash-lite'
 ];
 
-const REQUEST_TIMEOUT_MS = 35000;
+const REQUEST_TIMEOUT_MS = 60000;
 
 /**
  * Checks if a model ID is obsolete or shut down across providers
@@ -319,6 +319,102 @@ export function getFallbackModels(provider, primaryModel) {
   return [...new Set(candidates.filter(Boolean))];
 }
 
+/**
+ * Reads and accumulates an SSE stream (e.g. from OpenRouter stream: true)
+ * Extracts both content delta chunks and reasoning tokens seamlessly.
+ * Works across browser fetch (getReader), Node.js async iterators, and standard JSON responses.
+ * @param {Response} res
+ * @returns {Promise<string>}
+ */
+export async function readSseStream(res) {
+  let rawText = '';
+  let reasoningText = '';
+
+  if (res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':')) continue;
+        if (trimmed === 'data: [DONE]') continue;
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            if (json.error) {
+              throw new Error(json.error.message || 'OpenRouter stream error');
+            }
+            const delta = json.choices?.[0]?.delta;
+            if (delta) {
+              if (delta.content) rawText += delta.content;
+              if (delta.reasoning || delta.reasoning_content) {
+                reasoningText += (delta.reasoning || delta.reasoning_content);
+              }
+            }
+          } catch (e) {
+            if (e.message && e.message.includes('OpenRouter stream error')) throw e;
+          }
+        }
+      }
+    }
+  } else if (res.body && typeof res.body[Symbol.asyncIterator] === 'function') {
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    for await (const chunk of res.body) {
+      buffer += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':')) continue;
+        if (trimmed === 'data: [DONE]') continue;
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            if (json.error) {
+              throw new Error(json.error.message || 'OpenRouter stream error');
+            }
+            const delta = json.choices?.[0]?.delta;
+            if (delta) {
+              if (delta.content) rawText += delta.content;
+              if (delta.reasoning || delta.reasoning_content) {
+                reasoningText += (delta.reasoning || delta.reasoning_content);
+              }
+            }
+          } catch (e) {
+            if (e.message && e.message.includes('OpenRouter stream error')) throw e;
+          }
+        }
+      }
+    }
+  } else if (typeof res.json === 'function') {
+    const data = await res.json();
+    rawText = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || '';
+    if (!rawText && (data.choices?.[0]?.message?.reasoning || data.choices?.[0]?.message?.reasoning_content)) {
+      reasoningText = data.choices?.[0]?.message?.reasoning || data.choices?.[0]?.message?.reasoning_content;
+    }
+  } else if (typeof res.text === 'function') {
+    rawText = await res.text();
+  }
+
+  if (!rawText && reasoningText) {
+    rawText = reasoningText;
+  }
+
+  return rawText;
+}
+
 export async function executeLlmRequest({
   provider,
   model,
@@ -412,9 +508,15 @@ export async function executeLlmRequest({
             throw new Error('Authentication failed (401/403). Please verify your Gemini API key in Settings.');
           }
 
-          // Rule 3 & 4: Model unavailable or nonexistent -> immediately skip model. Do not retry on nonexistent models!
+          const isCapacityOutage = (
+            code === 503 &&
+            (detail.includes('No capacity available') || detail.includes('UNAVAILABLE') || detail.includes('capacity'))
+          );
+
+          // Rule 3 & 4: Model unavailable, nonexistent, or server capacity outage -> immediately skip to fallback model!
           const isGeminiModelUnavailable = (
             code === 404 ||
+            isCapacityOutage ||
             errData.error?.status === 'NOT_FOUND' ||
             (code === 400 && (
               detail.includes('models/') ||
@@ -432,6 +534,9 @@ export async function executeLlmRequest({
               console.log(`[LLM EDIT ${reqId}] fallback=${nextModel}`);
               clearTimeout(timeoutId);
               break;
+            }
+            if (isCapacityOutage) {
+              throw new Error('Google Gemini servers are currently at capacity (503). Switch to Groq (openai/gpt-oss-120b) or OpenRouter in Settings for instant AI responses.');
             }
             throw new Error(`Configured Gemini model (${activeModel}) is unavailable: ${detail}`);
           }
@@ -468,8 +573,15 @@ export async function executeLlmRequest({
         } else {
           // OpenAI, OpenRouter, Groq
           let endpoint = 'https://api.openai.com/v1/chat/completions';
+          const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          };
+
           if (provider === LLM_PROVIDERS.OPENROUTER) {
             endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+            headers['HTTP-Referer'] = 'https://github.com/ChiragVasava/DOMLens';
+            headers['X-Title'] = 'DOMLens';
           } else if (provider === LLM_PROVIDERS.GROQ) {
             endpoint = 'https://api.groq.com/openai/v1/chat/completions';
           }
@@ -480,16 +592,18 @@ export async function executeLlmRequest({
             temperature
           };
 
+          // OpenRouter free router and models work best with streaming (avoids buffering/timeouts & captures reasoning tokens)
+          if (provider === LLM_PROVIDERS.OPENROUTER) {
+            reqBody.stream = true;
+          }
+
           if (jsonMode && (provider === LLM_PROVIDERS.OPENAI || provider === LLM_PROVIDERS.GROQ)) {
             reqBody.response_format = { type: 'json_object' };
           }
 
           const res = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
+            headers,
             body: JSON.stringify(reqBody),
             signal: controller.signal
           });
@@ -497,9 +611,18 @@ export async function executeLlmRequest({
           console.log(`[LLM EDIT ${reqId}] status=${res.status}`);
 
           if (res.ok) {
-            const data = await res.json();
-            const rawText = data.choices?.[0]?.message?.content;
-            if (!rawText) throw new Error(`Received empty response from ${provider.toUpperCase()}.`);
+            let rawText = '';
+            if (provider === LLM_PROVIDERS.OPENROUTER || reqBody.stream) {
+              rawText = await readSseStream(res);
+            } else {
+              const data = await res.json();
+              rawText = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || '';
+              if (!rawText && (data.choices?.[0]?.message?.reasoning || data.choices?.[0]?.message?.reasoning_content)) {
+                rawText = data.choices?.[0]?.message?.reasoning || data.choices?.[0]?.message?.reasoning_content;
+              }
+            }
+
+            if (!rawText || !rawText.trim()) throw new Error(`Received empty response from ${provider.toUpperCase()}.`);
             const trimmed = rawText.trim();
             return returnMeta ? { text: trimmed, model: activeModel, reqId } : trimmed;
           }
@@ -537,11 +660,15 @@ export async function executeLlmRequest({
             throw new Error(`Authentication failed. Invalid API key for ${provider.toUpperCase()}.`);
           }
 
+          if (code === 402) {
+            throw new Error(`OpenRouter credits depleted (402). Please switch to a free model (e.g. openrouter/free) or add credits.`);
+          }
+
           if (code === 400) {
             throw new Error(`${provider.toUpperCase()} bad request (400): ${detail}`);
           }
 
-          if (code === 503 || code === 429 || code === 500) {
+          if (code === 503 || code === 429 || code === 500 || code === 502 || code === 524) {
             if (attempt < maxRetriesPerModel) {
               attempt++;
               clearTimeout(timeoutId);
@@ -645,14 +772,18 @@ function normalizeParsedSchema(obj) {
 export function safeParseJson(rawText) {
   if (!rawText) return null;
 
+  // Clean reasoning blocks like <think>...</think> from models such as DeepSeek R1
+  const cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  const textToParse = cleaned || rawText;
+
   // 1. Direct parse attempt
   try {
-    const obj = JSON.parse(rawText);
+    const obj = JSON.parse(textToParse);
     return normalizeParsedSchema(obj);
   } catch (e) {}
 
   // 2. Strip markdown code fences ```json ... ``` or ``` ... ```
-  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const fenceMatch = textToParse.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenceMatch && fenceMatch[1]) {
     try {
       const obj = JSON.parse(fenceMatch[1].trim());
@@ -666,10 +797,10 @@ export function safeParseJson(rawText) {
   }
 
   // 3. Find outermost { and }
-  const firstBrace = rawText.indexOf('{');
-  const lastBrace = rawText.lastIndexOf('}');
+  const firstBrace = textToParse.indexOf('{');
+  const lastBrace = textToParse.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
-    let candidate = rawText.substring(firstBrace, lastBrace + 1);
+    let candidate = textToParse.substring(firstBrace, lastBrace + 1);
     try {
       const obj = JSON.parse(candidate);
       return normalizeParsedSchema(obj);
