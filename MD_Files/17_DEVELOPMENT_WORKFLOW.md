@@ -23,7 +23,7 @@ Developing Manifest V3 extension components requires understanding the execution
 
 ## Rapid Reload Workflow
 
-When making code changes to Qursor++:
+When making code changes to DOMLens:
 
 ### 1. Changes to Content Scripts (`content/*.js`) or Utils (`utils/*.js`)
 - Save file in code editor.
@@ -33,7 +33,7 @@ When making code changes to Qursor++:
 ### 2. Changes to Background Worker (`background/background.js`) or Manifest (`manifest.json`)
 - Save file in code editor.
 - Navigate to `chrome://extensions/`.
-- Click the **Reload (↻)** icon on the Qursor++ extension card.
+- Click the **Reload (↻)** icon on the DOMLens extension card.
 - Refresh the active target webpage tab.
 
 ---

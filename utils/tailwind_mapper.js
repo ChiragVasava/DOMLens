@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Computed CSS to Tailwind Utility Class Mapper
+ * DOMLens - Computed CSS to Tailwind Utility Class Mapper
  * 
  * Analyzes computed style objects and converts visual declarations into clean Tailwind CSS classes.
  */

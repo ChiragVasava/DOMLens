@@ -1,5 +1,5 @@
 /**
- * Qursor++ AI - Popup Logic
+ * DOMLens - Popup Logic
  * 
  * Synchronizes inspector state, theme preferences, and shortcuts with background service worker.
  */
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Settings button click placeholder
   settingsBtn.addEventListener('click', () => {
-    alert('Qursor++ AI Inspector Settings: Theme, Keyboard Shortcuts, and AI Prompt Rules configured via Popup and Panel controls.');
+    alert('DOMLens Inspector Settings: Theme, Keyboard Shortcuts, and AI Prompt Rules configured via Popup and Panel controls.');
   });
 
   /**

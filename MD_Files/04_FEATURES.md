@@ -1,8 +1,8 @@
-# Qursor++ — Master Feature Architecture & Documentation
+# DOMLens — Master Feature Architecture & Documentation
 
 Point. Inspect. Generate. Build.
 
-Qursor++ is a production-grade Chrome Extension (Manifest V3) combining visual HTML element inspection, computed style analysis, React & Tailwind code synthesis, LLM-driven natural language component editing, media asset discovery, and theme-isolated live preview rendering.
+DOMLens is a production-grade Chrome Extension (Manifest V3) combining visual HTML element inspection, computed style analysis, React & Tailwind code synthesis, LLM-driven natural language component editing, media asset discovery, and theme-isolated live preview rendering.
 
 ---
 

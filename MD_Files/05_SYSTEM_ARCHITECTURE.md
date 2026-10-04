@@ -1,7 +1,7 @@
 # 05 - System Architecture
 
 ## Overview
-**Qursor++** follows a multi-tier Chrome Extension Manifest V3 architecture. The architecture separates the background service worker, extension popup UI, content script module orchestrator, and an isolated Shadow DOM presentation container backed by an authoritative `ComponentState` model and centralized `llm_service`.
+**DOMLens** follows a multi-tier Chrome Extension Manifest V3 architecture. The architecture separates the background service worker, extension popup UI, content script module orchestrator, and an isolated Shadow DOM presentation container backed by an authoritative `ComponentState` model and centralized `llm_service`.
 
 ---
 

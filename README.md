@@ -1,10 +1,10 @@
-# Qursor++ ⚡
+# DOMLens ⚡
 
 > **Point. Inspect. Edit with AI. Generate. Build.**
 > 
 > *A Production-Grade Visual HTML Inspector, Computed Style Analyzer, React (Tailwind JSX) & HTML+CSS Component Generator, Asset Tree Scanner, Natural Language LLM Component Editor & Multi-Provider AI Engine Chrome Extension.*
 
-Qursor++ is a lightweight, high-precision Chrome Extension (Manifest V3) that allows developers, UI engineers, and AI workflows to visually inspect any HTML element on **ANY website**, extract complete computed styles, box model dimensions, typography, and color codes, synthesize production-ready React (Tailwind JSX) and HTML+CSS component code, scan full asset trees (including YouTube thumbnails), edit component markup and styles live using natural language AI instructions, and preview components inside a theme-isolated sandbox.
+DOMLens is a lightweight, high-precision Chrome Extension (Manifest V3) that allows developers, UI engineers, and AI workflows to visually inspect any HTML element on **ANY website**, extract complete computed styles, box model dimensions, typography, and color codes, synthesize production-ready React (Tailwind JSX) and HTML+CSS component code, scan full asset trees (including YouTube thumbnails), edit component markup and styles live using natural language AI instructions, and preview components inside a theme-isolated sandbox.
 
 ---
 
@@ -94,7 +94,7 @@ MD_Files/
 ├── 17_DEVELOPMENT_WORKFLOW.md          # Developer lifecycle & console logging
 ├── 18_CODING_STANDARDS.md              # ES2023 style rules & JSDoc conventions
 ├── 19_ERROR_HANDLING.md                # Fallback strategies & clipboard copy
-├── 20_CURRENT_IMPLEMENTATION.md        # Snapshot of Qursor++ implementation
+├── 20_CURRENT_IMPLEMENTATION.md        # Snapshot of DOMLens implementation
 ├── 21_ROADMAP.md                       # Multi-phase development roadmap
 ├── 22_FUTURE_AI_INTEGRATION.md         # LLM prompt engineering & AI pipeline design
 ├── 23_KNOWN_LIMITATIONS.md             # Technical boundaries (cross-origin iframes, chrome://)

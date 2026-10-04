@@ -1,14 +1,14 @@
 # 01 - Project Overview
 
 ## Project Vision & Purpose
-**Qursor++** (formerly DOMLens) is an advanced, production-grade Chrome Extension (Manifest V3) designed to empower web developers, UI/UX designers, QA engineers, and AI workflows with visual HTML element inspection, computed CSS style extraction, DOM hierarchy depth mapping, and 1-click DevTools telemetry export.
+**DOMLens** (formerly DOMLens) is an advanced, production-grade Chrome Extension (Manifest V3) designed to empower web developers, UI/UX designers, QA engineers, and AI workflows with visual HTML element inspection, computed CSS style extraction, DOM hierarchy depth mapping, and 1-click DevTools telemetry export.
 
-When inspecting modern web applications, traditional browser DevTools require toggling between multiple panels, searching through complex style cascade inheritance rules, manually constructing CSS selectors or XPaths, and copying code snippets line-by-line. **Qursor++** solves these inefficiencies by placing an isolated, high-performance, non-intrusive floating inspection panel directly onto any webpage using Encapsulated Shadow DOM.
+When inspecting modern web applications, traditional browser DevTools require toggling between multiple panels, searching through complex style cascade inheritance rules, manually constructing CSS selectors or XPaths, and copying code snippets line-by-line. **DOMLens** solves these inefficiencies by placing an isolated, high-performance, non-intrusive floating inspection panel directly onto any webpage using Encapsulated Shadow DOM.
 
 ---
 
 ## Key Project Identity
-- **Project Name**: Qursor++ (Internal code name: DOMLens)
+- **Project Name**: DOMLens (Internal code name: DOMLens)
 - **Extension Type**: Chrome Extension Manifest V3
 - **Primary Goal**: Rapid visual element inspection, DOM depth hierarchy analysis, and 1-click DevTools structured code export.
 - **Current Version**: `v1.0.0` (Phase 1 & Phase 2 Completed)

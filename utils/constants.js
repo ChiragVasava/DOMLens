@@ -1,8 +1,8 @@
 /**
- * Qursor++ AI - Constants
+ * DOMLens - Constants
  * 
  * Centralized constant definitions used across content scripts, background service worker, and popup.
- * Supports the complete master feature suite inside the Qursor visual design system.
+ * Supports the complete master feature suite inside the DOMLens visual design system.
  */
 
 // Extension Action & Communication Keys
@@ -22,8 +22,8 @@ export const INSPECTOR_STATE = {
   SELECTED: 'SELECTED',
 };
 
-// Qursor++ Master Navigation Bar Tabs (9 Final Tabs)
-export const QURSOR_NAV_TABS = [
+// DOMLens Master Navigation Bar Tabs (9 Final Tabs)
+export const DOMLENS_NAV_TABS = [
   { id: 'live', label: 'Live', icon: '👁️' },
   { id: 'overview', label: 'Overview', icon: 'ⓘ' },
   { id: 'typography', label: 'Typography', icon: 'T' },
@@ -34,6 +34,8 @@ export const QURSOR_NAV_TABS = [
   { id: 'assets', label: 'Assets', icon: '🖼️' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ];
+// Backwards compatibility alias
+export const QURSOR_NAV_TABS = DOMLENS_NAV_TABS;
 
 // Highlight Theme Styling Constants
 export const OVERLAY_STYLES = {

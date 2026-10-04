@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Centralized Component State Model
+ * DOMLens - Centralized Component State Model
  * 
  * Serves as the authoritative single source of truth for the inspected component.
  * Synchronizes state across Live Preview, Overview, Typography, Colors, Layout,
@@ -83,7 +83,7 @@ export class ComponentState {
       try {
         fn(this, eventType);
       } catch (err) {
-        console.error('[Qursor++ ComponentState] Error in subscriber:', err);
+        console.error('[DOMLens ComponentState] Error in subscriber:', err);
       }
     });
   }

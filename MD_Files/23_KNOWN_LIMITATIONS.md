@@ -2,7 +2,7 @@
 
 ## Technical Boundaries & Browser Constraints
 
-While **Qursor++** provides inspection capabilities across standard web applications, certain browser security boundaries impose technical limitations.
+While **DOMLens** provides inspection capabilities across standard web applications, certain browser security boundaries impose technical limitations.
 
 ---
 

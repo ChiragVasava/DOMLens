@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Element Data Extractor (YouTube Thumbnail & Media Intelligence)
+ * DOMLens - Element Data Extractor (YouTube Thumbnail & Media Intelligence)
  * 
  * Master analytical engine collecting complete DevTools-grade DOM properties,
  * computed styles, box model, hierarchy, selector paths, accessibility, and element-specific details.
@@ -19,7 +19,7 @@ import { extractComputedStyles, getRawCssString } from '../utils/style.js';
  * Traces the ancestor tree to find effective non-transparent background color,
  * computed text color, font family, and color scheme classification.
  * This guarantees the selected component preserves its original appearance
- * regardless of whether Qursor++ extension UI is in Light or Dark mode.
+ * regardless of whether DOMLens extension UI is in Light or Dark mode.
  * 
  * @param {Element} element
  * @returns {{ effectiveBg: string, effectiveColor: string, effectiveFontFamily: string, colorScheme: 'dark'|'light' }}
@@ -69,7 +69,7 @@ export function getEffectiveElementColors(element) {
       }
     }
   } catch (e) {
-    console.warn('[Qursor++ Extractor] Error resolving effective colors:', e);
+    console.warn('[DOMLens Extractor] Error resolving effective colors:', e);
   }
 
   // Fallback if the whole page is transparent

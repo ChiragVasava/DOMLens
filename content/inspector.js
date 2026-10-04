@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Main Content Script Orchestrator
+ * DOMLens - Main Content Script Orchestrator
  * 
  * Coordinates mouse hover events, capture-phase element selection,
  * keyboard shortcut handlers, overlay highlights, and floating panel display.
@@ -10,7 +10,7 @@ import { extractElementData } from './extractor.js';
 import { InspectorOverlay } from './overlay.js';
 import { InspectorPanel } from './panel.js';
 
-class QursorEngine {
+class DOMLensEngine {
   constructor() {
     this.isActive = false;
     this.overlay = null;
@@ -48,7 +48,7 @@ class QursorEngine {
       // Sync initial state from extension storage
       chrome.runtime.sendMessage({ action: ACTIONS.GET_INSPECT_STATE }, (res) => {
         if (chrome.runtime.lastError) {
-          console.warn('[Qursor++] Could not get inspect state:', chrome.runtime.lastError.message);
+          console.warn('[DOMLens] Could not get inspect state:', chrome.runtime.lastError.message);
           return;
         }
         if (res && res.active) {
@@ -56,9 +56,9 @@ class QursorEngine {
         }
       });
 
-      console.log('[Qursor++] Engine initialized successfully.');
+      console.log('[DOMLens] Engine initialized successfully.');
     } catch (err) {
-      console.error('[Qursor++] Engine initialization failed:', err);
+      console.error('[DOMLens] Engine initialization failed:', err);
     }
   }
 
@@ -74,7 +74,7 @@ class QursorEngine {
     document.addEventListener('keydown', this.handleKeyDown, true);
 
     document.body.style.cursor = 'crosshair';
-    console.log('[Qursor++] Inspect mode ENABLED');
+    console.log('[DOMLens] Inspect mode ENABLED');
   }
 
   /**
@@ -98,7 +98,7 @@ class QursorEngine {
       // Keep selected highlight + panel visible — just stop hovering
       this.overlay.hideHover();
     }
-    console.log('[Qursor++] Inspect mode DISABLED (hideSelected=' + hideSelected + ')');
+    console.log('[DOMLens] Inspect mode DISABLED (hideSelected=' + hideSelected + ')');
   }
 
   /**
@@ -210,8 +210,10 @@ class QursorEngine {
 
 // ─── Singleton Engine instantiation ───
 // Guard against re-instantiation on hot-reload or double injection
-if (!window.__qursorEngine) {
-  window.__qursorEngine = new QursorEngine();
+if (!window.__domlensEngine && !window.__qursorEngine) {
+  const engine = new DOMLensEngine();
+  window.__domlensEngine = engine;
+  window.__qursorEngine = engine;
 } else {
-  console.log('[Qursor++] Engine already active, skipping re-init.');
+  console.log('[DOMLens] Engine already active, skipping re-init.');
 }

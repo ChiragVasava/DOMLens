@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Theme & Design Token Manager (100% Synchronized Theme Engine)
+ * DOMLens - Theme & Design Token Manager (100% Synchronized Theme Engine)
  * 
  * Centralized Theme Manager handling Dark, Light, and System themes using CSS Custom Properties.
  * Persists theme preference in chrome.storage.sync and syncs in real-time across Popup and Floating Inspector Panel.
@@ -11,7 +11,8 @@ export const THEMES = {
   SYSTEM: 'system',
 };
 
-export const THEME_STORAGE_KEY = 'qursor_theme_preference';
+export const THEME_STORAGE_KEY = 'domlens_theme_preference';
+export const LEGACY_THEME_STORAGE_KEY = 'qursor_theme_preference';
 
 /**
  * Theme Design Tokens Definitions
@@ -121,8 +122,8 @@ export class ThemeManager {
    */
   async init() {
     return new Promise((resolve) => {
-      chrome.storage.sync.get([THEME_STORAGE_KEY], (res) => {
-        const storedTheme = res[THEME_STORAGE_KEY] || THEMES.DARK;
+      chrome.storage.sync.get([THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY], (res) => {
+        const storedTheme = res[THEME_STORAGE_KEY] || res[LEGACY_THEME_STORAGE_KEY] || THEMES.DARK;
         this.setTheme(storedTheme, false);
         resolve(this.currentTheme);
       });
@@ -153,13 +154,13 @@ export class ThemeManager {
         if (this.targetElement.host) {
           this.targetElement.host.setAttribute('data-theme', effectiveTheme);
         }
-        // Apply to the .qursor-floating-panel inside (triggers [data-theme] CSS rules on it)
-        const panelEl = this.targetElement.querySelector('.qursor-floating-panel');
+        // Apply to the .domlens-floating-panel inside (triggers [data-theme] CSS rules on it)
+        const panelEl = this.targetElement.querySelector('.domlens-floating-panel, .qursor-floating-panel');
         if (panelEl) {
           panelEl.setAttribute('data-theme', effectiveTheme);
         }
         // Also apply to navbar and trigger bar for their own background colors
-        const navBar = this.targetElement.querySelector('.qursor-icon-navbar');
+        const navBar = this.targetElement.querySelector('.domlens-icon-navbar, .qursor-icon-navbar');
         if (navBar) {
           // Force repaint by toggling a class — helps Chrome's CSS variable resolution
           navBar.classList.toggle('_theme_repaint_', effectiveTheme === THEMES.DARK);
@@ -171,7 +172,10 @@ export class ThemeManager {
     }
 
     if (persist) {
-      chrome.storage.sync.set({ [THEME_STORAGE_KEY]: theme });
+      chrome.storage.sync.set({
+        [THEME_STORAGE_KEY]: theme,
+        [LEGACY_THEME_STORAGE_KEY]: theme
+      });
     }
 
     this.notifyListeners(effectiveTheme);

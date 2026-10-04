@@ -1,8 +1,8 @@
-# Qursor++ — Current Implementation Snapshot
+# DOMLens — Current Implementation Snapshot
 
 Point. Inspect. Edit with AI. Generate. Build.
 
-This document describes the current snapshot of the refactored **Qursor++** implementation.
+This document describes the current snapshot of the refactored **DOMLens** implementation.
 
 ---
 

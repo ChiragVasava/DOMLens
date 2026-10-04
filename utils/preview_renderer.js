@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Isolated Live Preview Renderer
+ * DOMLens - Isolated Live Preview Renderer
  * 
  * Compiles authoritative current HTML + current CSS into an isolated sandboxed preview document.
  * Enforces Canvas vs Component background isolation:

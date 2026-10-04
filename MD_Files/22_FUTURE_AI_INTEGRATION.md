@@ -2,7 +2,7 @@
 
 ## Phase 3 AI Integration Design
 
-**Qursor++** is architected to seamlessly connect extracted DOM telemetry with Large Language Models (LLMs) like OpenAI GPT-4o, Google Gemini 1.5, or Anthropic Claude 3.5.
+**DOMLens** is architected to seamlessly connect extracted DOM telemetry with Large Language Models (LLMs) like OpenAI GPT-4o, Google Gemini 1.5, or Anthropic Claude 3.5.
 
 ---
 
@@ -30,11 +30,11 @@ graph LR
 
 ## Proposed LLM Prompt Structure
 
-When a user requests an AI-assisted style change, Qursor++ will construct a structured prompt incorporating element telemetry:
+When a user requests an AI-assisted style change, DOMLens will construct a structured prompt incorporating element telemetry:
 
 ```text
 [SYSTEM CONTEXT]
-You are Qursor++ AI, an expert frontend developer and CSS wizard.
+You are DOMLens AI, an expert frontend developer and CSS wizard.
 Mutate the CSS properties of the target HTML element according to the user's natural language request.
 
 [TARGET ELEMENT TELEMETRY]

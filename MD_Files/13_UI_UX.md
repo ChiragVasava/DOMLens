@@ -2,7 +2,7 @@
 
 ## Design Philosophy
 
-**Qursor++** adheres to modern developer interface guidelines: sleek dark mode glassmorphism, subtle micro-interactions, responsive tab navigation, and clear visual feedback.
+**DOMLens** adheres to modern developer interface guidelines: sleek dark mode glassmorphism, subtle micro-interactions, responsive tab navigation, and clear visual feedback.
 
 ---
 
@@ -37,7 +37,7 @@
 
 ### 1. Extension Popup UI (`popup/`)
 - **Width**: `320px` compact popup container.
-- **Brand Header**: Vector logo, gradient title ("Qursor++ AI"), and version badge.
+- **Brand Header**: Vector logo, gradient title ("DOMLens AI"), and version badge.
 - **Status Indicator Pill**: Animated pulsing emerald green indicator when inspect mode is active; neutral slate grey when inactive.
 - **Action Button**: Gradient action button (`Enable Inspector` / `Disable Inspector`).
 - **Shortcut Cards**: Visual `<kbd>` cheat-sheet (`Ctrl + Shift + I` & `ESC`).

@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Interactive Style Editor & Instruction Parser
+ * DOMLens - Interactive Style Editor & Instruction Parser
  * 
  * Parses text instructions (e.g., "make background blue", "change font size to 24px", "set padding 16px")
  * and handles style mutations for live preview re-rendering and code generation export.

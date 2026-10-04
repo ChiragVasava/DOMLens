@@ -2,7 +2,7 @@
 
 ## Error Resilience Matrix
 
-**Qursor++** implements defensive error handling across content script injection, chrome API messaging, clipboard writing, and DOM parsing.
+**DOMLens** implements defensive error handling across content script injection, chrome API messaging, clipboard writing, and DOM parsing.
 
 ---
 

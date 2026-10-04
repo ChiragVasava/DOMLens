@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Safe HTML-Aware Deterministic Text Editor
+ * DOMLens - Safe HTML-Aware Deterministic Text Editor
  * 
  * Performs instant, zero-latency, HTML-aware literal text replacements directly on component HTML
  * without calling external LLM APIs.
@@ -286,7 +286,7 @@ function updateCssProp(css, prop, val) {
   if (propRegex.test(css)) {
     return css.replace(propRegex, `$1${val} !important;`);
   }
-  return `/* Modified via Qursor++ Style Engine */\n* {\n  ${prop}: ${val} !important;\n}\n\n${css}`;
+  return `/* Modified via DOMLens Style Engine */\n* {\n  ${prop}: ${val} !important;\n}\n\n${css}`;
 }
 
 /**

@@ -2,7 +2,7 @@
 
 ## Quality Assurance & Verification Methodology
 
-Because **Qursor++** is a Chrome Extension operating inside third-party web page DOM contexts, testing focuses on DOM interception accuracy, Shadow DOM isolation, state synchronization, and performance under diverse web page structures.
+Because **DOMLens** is a Chrome Extension operating inside third-party web page DOM contexts, testing focuses on DOM interception accuracy, Shadow DOM isolation, state synchronization, and performance under diverse web page structures.
 
 ---
 

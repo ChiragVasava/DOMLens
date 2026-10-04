@@ -2,7 +2,7 @@
 
 ## Security Model Overview
 
-**Qursor++** is designed under a Zero-Trust client security model, strictly following Chrome Extension Manifest V3 Security Policies (CSP), zero external network calls, zero dynamic code evaluation, and complete DOM encapsulation.
+**DOMLens** is designed under a Zero-Trust client security model, strictly following Chrome Extension Manifest V3 Security Policies (CSP), zero external network calls, zero dynamic code evaluation, and complete DOM encapsulation.
 
 ---
 

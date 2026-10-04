@@ -1,6 +1,6 @@
-# Qursor++ — File Responsibilities & Modules
+# DOMLens — File Responsibilities & Modules
 
-This document details the exact architectural responsibilities of every file in the refactored **Qursor++** codebase.
+This document details the exact architectural responsibilities of every file in the refactored **DOMLens** codebase.
 
 ---
 
@@ -19,7 +19,7 @@ This document details the exact architectural responsibilities of every file in 
 - **Responsibilities**: Dynamically imports `content/inspector.js` into the active tab context.
 
 ### 4. `content/inspector.js`
-- **Purpose**: Main content script orchestrator (`QursorEngine`).
+- **Purpose**: Main content script orchestrator (`DOMLensEngine`).
 - **Responsibilities**: Intercepts pointer movements during inspection, catches capture-phase clicks (`e.preventDefault()`, `e.stopPropagation()`), manages `Escape` cancellation, initializes `ComponentState` on click, feeds extracted telemetry to `InspectorOverlay` and `InspectorPanel`, and coordinates `ACTIONS.THEME_CHANGED` events.
 
 ### 5. `content/overlay.js`

@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Visual Overlay Engine (100% Qursor Replica)
+ * DOMLens - Visual Overlay Engine
  * 
  * Manages hover bounding box highlights, selection box with blue numbered badge '1',
  * and hover details inspector tooltip cards.
@@ -95,7 +95,7 @@ export class InspectorOverlay {
         z-index: ${OVERLAY_STYLES.Z_INDEX + 2};
       }
 
-      /* Qursor Hover Inspector Card */
+      /* DOMLens Hover Inspector Card */
       .inspector-tooltip-card {
         position: fixed;
         pointer-events: none;
@@ -208,7 +208,7 @@ export class InspectorOverlay {
       this.positionBox(this.hoverBox, rect);
       this.hoverBox.style.display = 'block';
 
-      // Qursor Hover Inspector Card Data
+      // DOMLens Hover Inspector Card Data
       const tag = `<${element.tagName.toLowerCase()}>`;
       const dim = `${Math.round(rect.width)} × ${Math.round(rect.height)}px`;
       const cs = window.getComputedStyle(element);

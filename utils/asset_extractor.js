@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Comprehensive Asset Extractor Engine
+ * DOMLens - Comprehensive Asset Extractor Engine
  * 
  * Deeply scans the selected element and child DOM subtree to discover all media assets:
  * - Images (src, currentSrc, srcset, data-src, data-thumb, data-original, etc.)

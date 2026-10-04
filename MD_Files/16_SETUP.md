@@ -2,7 +2,7 @@
 
 ## Quick Installation Guide
 
-Because **Qursor++** is built as a zero-dependency native Chrome Extension (Manifest V3), no build, bundling, or `npm install` steps are required prior to installation.
+Because **DOMLens** is built as a zero-dependency native Chrome Extension (Manifest V3), no build, bundling, or `npm install` steps are required prior to installation.
 
 ---
 
@@ -39,7 +39,7 @@ Because **Qursor++** is built as a zero-dependency native Chrome Extension (Mani
    - Select the project root folder (`c:\Users\...\DOMLens`).
 
 5. **Verify Installation**:
-   - Confirm **Qursor++** appears in your extension list with version `1.0.0`.
+   - Confirm **DOMLens** appears in your extension list with version `1.0.0`.
    - Pin the extension icon to your browser toolbar for quick access.
 
 ---
@@ -47,7 +47,7 @@ Because **Qursor++** is built as a zero-dependency native Chrome Extension (Mani
 ## Testing Extension Functionality
 
 1. Open any public website (e.g. `https://news.ycombinator.com` or your local development server `http://localhost:3000`).
-2. Click the **Qursor++** toolbar icon to open the popup.
+2. Click the **DOMLens** toolbar icon to open the popup.
 3. Click **Enable Inspector** (or press `Ctrl+Shift+I` / `Cmd+Shift+I`).
 4. Hover over any webpage button or header text; confirm blue bounding highlight box appears.
 5. Click an element to lock selection and view detailed telemetry inside the floating Shadow DOM panel.

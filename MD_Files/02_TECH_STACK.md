@@ -16,7 +16,7 @@
 
 ### 1. Extension Manifest (`manifest.json`)
 - **Manifest Version**: 3
-- **Extension Name**: `Qursor++`
+- **Extension Name**: `DOMLens`
 - **Version**: `1.0.0`
 - **Background Worker**: `background/background.js` (type: `"module"`)
 - **Content Scripts**: Entry loader script `content/loader.js` running at `document_idle` on `<all_urls>`
@@ -33,7 +33,7 @@
 
 ## Zero-Dependency Guarantee
 
-Qursor++ is built entirely with native web standard technologies.
+DOMLens is built entirely with native web standard technologies.
 
 ```text
 Dependencies Count: 0

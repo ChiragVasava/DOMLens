@@ -2,7 +2,7 @@
 
 ## DOM Inspection Techniques & Algorithms
 
-**Qursor++** uses capture-phase event listening, element targeting algorithms, sub-pixel bounding box math, and DOM isolation boundaries to achieve reliable element inspection across complex web applications.
+**DOMLens** uses capture-phase event listening, element targeting algorithms, sub-pixel bounding box math, and DOM isolation boundaries to achieve reliable element inspection across complex web applications.
 
 ---
 
@@ -11,7 +11,7 @@
 In standard DOM event propagation, event listeners default to the **Bubbling Phase** (inner element to window root). If a website contains custom event listeners (such as `event.stopPropagation()`), bubbling listeners may never fire.
 
 ### Implementation Pattern (`content/inspector.js`)
-Qursor++ attaches listeners during the **Capture Phase** by setting the third parameter of `addEventListener` to `true`.
+DOMLens attaches listeners during the **Capture Phase** by setting the third parameter of `addEventListener` to `true`.
 
 ```javascript
 // Capture-phase event registration
@@ -36,7 +36,7 @@ handleMouseMove(e) {
 
   const target = document.elementFromPoint(e.clientX, e.clientY);
   
-  // Ignore Qursor++'s own Shadow DOM host
+  // Ignore DOMLens's own Shadow DOM host
   if (!target || target.closest('#website-inspector-root')) {
     this.overlay.hideHover();
     return;
@@ -88,4 +88,4 @@ updateHover(element) {
 
 ## 5. Component Telemetry & Isolation
 
-Rather than relying on brittle, context-dependent XPath strings, Qursor++ extracts comprehensive CSS selectors, computed properties, and bounding box geometry. This guarantees robust element tracking across responsive layout changes and dynamic single-page applications.
+Rather than relying on brittle, context-dependent XPath strings, DOMLens extracts comprehensive CSS selectors, computed properties, and bounding box geometry. This guarantees robust element tracking across responsive layout changes and dynamic single-page applications.

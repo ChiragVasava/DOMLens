@@ -1,5 +1,5 @@
 /**
- * Qursor++ AI - Centralized LLM Communication Layer
+ * DOMLens - Centralized LLM Communication Layer
  * 
  * Provides unified, secure access to LLMs (Google Gemini, OpenAI, OpenRouter, Groq)
  * for Component Editing (structured HTML+CSS JSON output) and React + Tailwind generation.
@@ -100,7 +100,7 @@ export async function discoverGeminiModels(apiKey) {
       if (valid.length > 0) return valid;
     }
   } catch (e) {
-    console.warn('[Qursor++ LLM] Model discovery failed, using verified fallback list:', e);
+    console.warn('[DOMLens LLM] Model discovery failed, using verified fallback list:', e);
   }
   return VERIFIED_GEMINI_MODELS;
 }
@@ -150,24 +150,30 @@ export async function getLlmConfig(targetProvider = null) {
     };
   }
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model', 'qursor_api_keys'], (res) => {
-      const apiKeys = res.qursor_api_keys || {};
-      const legacyKey = (res.qursor_api_key || '').trim();
+    chrome.storage.sync.get([
+      'domlens_api_key', 'domlens_llm_provider', 'domlens_llm_model', 'domlens_api_keys',
+      'qursor_api_key', 'qursor_llm_provider', 'qursor_llm_model', 'qursor_api_keys'
+    ], (res) => {
+      const apiKeys = res.domlens_api_keys || res.qursor_api_keys || {};
+      const legacyKey = (res.domlens_api_key || res.qursor_api_key || '').trim();
       if (legacyKey && Object.keys(apiKeys).length === 0) {
         const detected = detectProvider(legacyKey);
         apiKeys[detected] = legacyKey;
       }
 
-      const activeProvider = targetProvider || res.qursor_llm_provider || LLM_PROVIDERS.GEMINI;
+      const activeProvider = targetProvider || res.domlens_llm_provider || res.qursor_llm_provider || LLM_PROVIDERS.GEMINI;
       let activeKey = (apiKeys[activeProvider] || (detectProvider(legacyKey) === activeProvider ? legacyKey : '')).trim();
 
       const validModels = (PROVIDER_FREE_MODELS[activeProvider] || []).map(m => m.id);
-      let model = res.qursor_llm_model;
+      let model = res.domlens_llm_model || res.qursor_llm_model;
       if (!model || !validModels.includes(model) || isModelObsolete(model)) {
         model = DEFAULT_MODELS[activeProvider] || validModels[0] || DEFAULT_GEMINI_MODEL;
         // Proactively sanitize stored model in chrome.storage so stale model doesn't linger
         try {
-          chrome.storage.sync.set({ qursor_llm_model: model });
+          chrome.storage.sync.set({
+            domlens_llm_model: model,
+            qursor_llm_model: model
+          });
         } catch (_) {}
       }
 
@@ -219,6 +225,10 @@ export async function saveLlmConfig(apiKey, provider = null, model = null) {
 
   return new Promise((resolve) => {
     chrome.storage.sync.set({
+      domlens_api_key: effectiveKey,
+      domlens_llm_provider: resolvedProvider,
+      domlens_llm_model: resolvedModel,
+      domlens_api_keys: updatedKeys,
       qursor_api_key: effectiveKey,
       qursor_llm_provider: resolvedProvider,
       qursor_llm_model: resolvedModel,
@@ -255,6 +265,9 @@ export async function switchLlmProvider(provider, model = null) {
   if (typeof chrome !== 'undefined' && chrome?.storage?.sync) {
     await new Promise((resolve) => {
       chrome.storage.sync.set({
+        domlens_llm_provider: resolvedProvider,
+        domlens_llm_model: resolvedModel,
+        domlens_api_key: apiKey,
         qursor_llm_provider: resolvedProvider,
         qursor_llm_model: resolvedModel,
         qursor_api_key: apiKey
@@ -287,6 +300,8 @@ export async function clearLlmConfig(provider = null) {
   }
   return new Promise((resolve) => {
     chrome.storage.sync.set({
+      domlens_api_key: '',
+      domlens_api_keys: updatedKeys,
       qursor_api_key: '',
       qursor_api_keys: updatedKeys
     }, () => {
@@ -914,7 +929,7 @@ Return the complete updated component JSON:`;
 
   // Auto-Repair Attempt (Phase 14): If response was invalid, perform 1 repair attempt using the model that succeeded
   if (!parsed || typeof parsed !== 'object' || typeof parsed.html !== 'string' || !parsed.html.trim()) {
-    console.warn('[Qursor++ LLM] Initial response was invalid JSON schema. Attempting 1 repair request...');
+    console.warn('[DOMLens LLM] Initial response was invalid JSON schema. Attempting 1 repair request...');
     try {
       const repairRaw = await executeLlmRequest({
         provider: config.provider,
@@ -931,7 +946,7 @@ Return the complete updated component JSON:`;
       });
       parsed = safeParseJson(repairRaw);
     } catch (repairErr) {
-      console.warn('[Qursor++ LLM] Repair attempt failed:', repairErr);
+      console.warn('[DOMLens LLM] Repair attempt failed:', repairErr);
     }
   }
 

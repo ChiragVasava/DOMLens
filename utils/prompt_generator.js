@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Structured AI Prompt Synthesizer
+ * DOMLens - Structured AI Prompt Synthesizer
  * 
  * Aggregates complete extracted element telemetry (structure, computed CSS, layout, 
  * typography, color palette, assets, accessibility, interaction states) and formats a 

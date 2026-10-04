@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Floating Information Panel UI
+ * DOMLens - Floating Information Panel UI
  * 
  * 9 Navigation Tabs:
  * 1. Live (Live component preview with zoom and canvas theme isolation)
@@ -13,7 +13,7 @@
  * 9. Settings (Theme preference, AI API configuration)
  */
 
-import { QURSOR_NAV_TABS } from '../utils/constants.js';
+import { DOMLENS_NAV_TABS, QURSOR_NAV_TABS } from '../utils/constants.js';
 import { copyToClipboard } from '../utils/clipboard.js';
 import { DESIGN_TOKENS, ThemeManager, THEMES } from '../utils/theme.js';
 import { ToastManager } from '../utils/toast.js';
@@ -89,6 +89,7 @@ export class InspectorPanel {
 
       * { box-sizing: border-box; }
 
+      .domlens-floating-panel,
       .qursor-floating-panel {
         position: fixed;
         bottom: 20px;
@@ -116,6 +117,7 @@ export class InspectorPanel {
       }
 
       /* Navigation Header */
+      .domlens-icon-navbar,
       .qursor-icon-navbar {
         display: flex;
         align-items: center;
@@ -128,6 +130,7 @@ export class InspectorPanel {
         flex-shrink: 0;
         min-height: 42px;
       }
+      .domlens-icon-navbar:active,
       .qursor-icon-navbar:active {
         cursor: grabbing;
       }
@@ -196,6 +199,7 @@ export class InspectorPanel {
       }
 
       /* Trigger / Status sub-bar */
+      .domlens-trigger-bar,
       .qursor-trigger-bar {
         padding: 8px 12px;
         background: var(--q-bg-surface);
@@ -272,6 +276,7 @@ export class InspectorPanel {
       }
 
       /* Scrollable Panel Body */
+      .domlens-panel-body,
       .qursor-panel-body {
         padding: 12px;
         overflow-y: auto;
@@ -281,7 +286,9 @@ export class InspectorPanel {
         flex-direction: column;
         gap: 10px;
       }
+      .domlens-panel-body::-webkit-scrollbar,
       .qursor-panel-body::-webkit-scrollbar { width: 5px; }
+      .domlens-panel-body::-webkit-scrollbar-thumb,
       .qursor-panel-body::-webkit-scrollbar-thumb {
         background: var(--q-border);
         border-radius: 4px;
@@ -307,7 +314,8 @@ export class InspectorPanel {
         font-size: 9px;
       }
 
-      .qursor-card {
+      .domlens-card,
+      .domlens-card {
         background: var(--q-bg-surface, #ffffff);
         border: 1px solid var(--q-border, #e5e5ea);
         border-radius: 12px;
@@ -552,14 +560,14 @@ export class InspectorPanel {
     this.shadowRoot.appendChild(style);
 
     this.panelContainer = document.createElement('div');
-    this.panelContainer.className = 'qursor-floating-panel';
+    this.panelContainer.className = 'domlens-floating-panel qursor-floating-panel';
     this.panelContainer.setAttribute('data-theme', THEMES.DARK);
 
     this.panelContainer.innerHTML = `
       <!-- Top Icon Navigation Header -->
-      <div class="qursor-icon-navbar" id="panelHeader">
+      <div class="domlens-icon-navbar qursor-icon-navbar" id="panelHeader">
         <div class="navbar-icons-group" id="navIconsGroup">
-          ${QURSOR_NAV_TABS.map(tab => `
+          ${DOMLENS_NAV_TABS.map(tab => `
             <button class="nav-icon-btn ${tab.id === this.state.activeTab ? 'active' : ''}" data-tab="${tab.id}" title="${tab.label}">
               <span>${tab.icon}</span>
               <span>${tab.label}</span>
@@ -573,14 +581,14 @@ export class InspectorPanel {
       </div>
 
       <!-- Sub-Header Trigger / Search Bar -->
-      <div class="qursor-trigger-bar" id="triggerBar">
+      <div class="domlens-trigger-bar qursor-trigger-bar" id="triggerBar">
         <div class="trigger-input-pill">
           <span>🔍 Click any element on webpage to inspect</span>
         </div>
       </div>
 
       <!-- Main Body Container -->
-      <div class="qursor-panel-body" id="panelBody">
+      <div class="domlens-panel-body qursor-panel-body" id="panelBody">
         <div class="empty-state">
           <div class="empty-state-icon">🎯</div>
           <div class="empty-state-title">No Element Selected</div>
@@ -593,9 +601,9 @@ export class InspectorPanel {
 
     // Initialize Theme & LLM Config
     this.themeManager.init().then((theme) => {
-      chrome.storage.sync.get(['qursor_theme_preference'], (res) => {
+      chrome.storage.sync.get(['domlens_theme_preference', 'qursor_theme_preference'], (res) => {
         let resolvedTheme = theme;
-        if (!res['qursor_theme_preference']) {
+        if (!res['domlens_theme_preference'] && !res['qursor_theme_preference']) {
           const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
           resolvedTheme = prefersLight ? THEMES.LIGHT : THEMES.DARK;
           this.themeManager.setTheme(resolvedTheme, true);
@@ -845,7 +853,7 @@ export class InspectorPanel {
         }
 
         const tag = (this.state.original.elementData.tag || 'component').toLowerCase();
-        this.downloadFile(content, `qursor_${tag}.${ext}`);
+        this.downloadFile(content, `domlens_${tag}.${ext}`);
         this.toastManager.show(`✓ Downloaded ${ext.toUpperCase()} file`, 'success');
         return;
       }
@@ -912,7 +920,7 @@ export class InspectorPanel {
     // Concurrency guard (Requirement 7):
     // If an AI edit is already running, block duplicate clicks
     if (this.isApplyingEdit) {
-      console.warn('[Qursor++ Edit] Apply ignored: An AI edit pipeline is already active.');
+      console.warn('[DOMLens Edit] Apply ignored: An AI edit pipeline is already active.');
       this.toastManager.show('An edit is already in progress. Please wait...', 'info');
       return;
     }
@@ -1022,7 +1030,7 @@ export class InspectorPanel {
       this.cachedAiReact = code;
       this.toastManager.show('✓ React component generated with AI & Tailwind!', 'success');
     } catch (err) {
-      console.error('[Qursor++ React Gen Error]:', err);
+      console.error('[DOMLens React Gen Error]:', err);
       this.toastManager.show(`React AI generation failed: ${err.message}`, 'error');
     } finally {
       this.isGeneratingAiReact = false;
@@ -1191,7 +1199,7 @@ export class InspectorPanel {
             <span>COMPONENT LIVE FRAME</span>
             <span class="node-badge">${targetWidth}×${targetHeight}px • Source: ${compScheme.toUpperCase()}</span>
           </div>
-          <div class="qursor-card" style="padding:4px;background:${compBg};border:1px solid var(--q-border);flex:1;min-height:280px;display:flex;">
+          <div class="domlens-card" style="padding:4px;background:${compBg};border:1px solid var(--q-border);flex:1;min-height:280px;display:flex;">
             <iframe id="livePreviewFrame" style="width:100%;flex:1;min-height:280px;border:none;border-radius:8px;background:${compBg};" srcdoc="${_escapeAttr(previewHtml)}"></iframe>
           </div>
           ${this.state.current.changes.length > 0 ? `
@@ -1216,7 +1224,7 @@ export class InspectorPanel {
             <span>ELEMENT SUMMARY</span>
             <span class="node-badge">&lt;${d.tag || 'DIV'}&gt;</span>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:4px;">General Attributes</div>
             <div class="prop-grid">
               ${_propRow('Tag Name', `&lt;${_esc(general.tagName || 'DIV')}&gt;`)}
@@ -1227,7 +1235,7 @@ export class InspectorPanel {
               ${_propRow('Accessible Name', _esc(general.accessibleName || 'N/A'))}
             </div>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:4px;">Quick Styles &amp; Colors</div>
             <div class="prop-grid">
               ${_propRow('Font Family', _esc((typography.fontFamily || 'Inherit').split(',')[0].replace(/['"]/g, '')))}
@@ -1238,7 +1246,7 @@ export class InspectorPanel {
               ${_propRow('Dimensions', `${d.widthPx || 0} × ${d.heightPx || 0}px`)}
             </div>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:4px;">Text Content</div>
             <div style="font-size:11px;color:var(--q-text-secondary);word-break:break-word;max-height:80px;overflow:auto;line-height:1.5;">
               ${_esc(general.textContent ? general.textContent.substring(0, 300) : 'No text content')}
@@ -1260,7 +1268,7 @@ export class InspectorPanel {
             <span>FONT SPECIMEN &amp; METRICS</span>
             <span class="node-badge">&lt;${d.tag || 'DIV'}&gt;</span>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:6px;">Live Specimen Render</div>
             <div style="
               font-family:${_esc(typography.fontFamily || 'sans-serif')};
@@ -1281,7 +1289,7 @@ export class InspectorPanel {
               ${_esc(general.textContent ? general.textContent.substring(0, 60) : 'AaBbCcDdEeFfGgHh 1234567890')}
             </div>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div class="prop-grid">
               ${_propRow('Primary Font', _esc(fontFam))}
               ${_propRow('Full Font Stack', _esc(typography.fontFamily || 'Inherit'))}
@@ -1304,7 +1312,7 @@ export class InspectorPanel {
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>🎨 Color Palette &amp; Swatches</span></div>`;
 
         const colorSwatchCard = (label, hex, raw) => `
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:6px;">${label}</div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <div style="width:40px;height:40px;border-radius:8px;background:${hex};border:1px solid rgba(128,128,128,0.3);flex-shrink:0;"></div>
@@ -1324,7 +1332,7 @@ export class InspectorPanel {
           ${colorSwatchCard('Text Color', hexColor, colors.color)}
           ${colorSwatchCard('Background Color', hexBg, colors.backgroundColor)}
           ${colorSwatchCard('Border Color', hexBorder, colors.borderColor || border.borderColor)}
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:6px;">Other Visual Properties</div>
             <div class="prop-grid">
               ${_propRow('Box Shadow', _esc(colors.boxShadow || 'none'))}
@@ -1346,7 +1354,7 @@ export class InspectorPanel {
             <span>BOX MODEL &amp; SPACING</span>
             <span class="node-badge">${d.widthPx || 0}×${d.heightPx || 0}px</span>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div class="spacing-diagram">
               <div style="width:100%;padding:8px;background:rgba(249,115,22,0.1);border:1px dashed #f97316;border-radius:6px;text-align:center;font-size:9px;color:var(--q-text-primary);">
                 <div style="font-weight:700;margin-bottom:4px;color:#f97316;">MARGIN: ${spacing.margin || '0px'}</div>
@@ -1359,7 +1367,7 @@ export class InspectorPanel {
               </div>
             </div>
           </div>
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:11px;color:var(--q-text-primary);margin-bottom:6px;">Layout Properties</div>
             <div class="prop-grid">
               ${_propRow('Display', layout.display || 'block')}
@@ -1398,7 +1406,7 @@ export class InspectorPanel {
         }
 
         body.innerHTML = `
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div class="prop-row" style="font-size:10px;color:var(--q-text-muted);margin-bottom:4px;">
               <span>${fmt.toUpperCase()} • ${codeOutput.length} chars</span>
               <div style="display:flex;gap:4px;">
@@ -1425,7 +1433,7 @@ export class InspectorPanel {
         const editState = this.state.editState;
 
         body.innerHTML = `
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:12px;color:var(--q-text-primary);display:flex;align-items:center;justify-content:space-between;">
               <span>EDIT COMPONENT</span>
               <span class="node-badge">&lt;${(d.tag || 'div').toLowerCase()}&gt;</span>
@@ -1460,7 +1468,7 @@ export class InspectorPanel {
             </div>
           ` : ''}
 
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-size:10px;color:var(--q-text-muted);line-height:1.6;">
               <strong style="color:var(--q-text-primary);">AI Edit Pipeline:</strong><br/>
               1. Your instruction + current HTML &amp; CSS are sent to the configured LLM.<br/>
@@ -1499,7 +1507,7 @@ export class InspectorPanel {
             <span class="node-badge">${this.state.assetFilter}</span>
           </div>
           ${filtered.length === 0
-            ? `<div class="qursor-card"><div class="empty-state"><div class="empty-state-icon">🖼️</div><div class="empty-state-title">No Assets Found</div><div class="empty-state-desc">No "${this.state.assetFilter}" assets found in this element's subtree.</div></div></div>`
+            ? `<div class="domlens-card"><div class="empty-state"><div class="empty-state-icon">🖼️</div><div class="empty-state-title">No Assets Found</div><div class="empty-state-desc">No "${this.state.assetFilter}" assets found in this element's subtree.</div></div></div>`
             : `<div class="asset-grid">
                 ${filtered.map(asset => `
                   <div class="asset-card-item">
@@ -1544,7 +1552,7 @@ export class InspectorPanel {
 
         body.innerHTML = `
           <!-- AI Configuration Card -->
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
               <span style="font-weight:700;font-size:12px;color:var(--q-text-primary);">AI Configuration</span>
               <span class="status-pill-badge ${isConfiguredForProvider ? 'configured' : 'not-configured'}">
@@ -1608,7 +1616,7 @@ export class InspectorPanel {
           </div>
 
           <!-- Appearance Card -->
-          <div class="qursor-card">
+          <div class="domlens-card">
             <div style="font-weight:700;font-size:12px;color:var(--q-text-primary);margin-bottom:4px;">Appearance</div>
             <div class="prop-row">
               <span class="prop-label">Current Theme:</span>
@@ -1627,7 +1635,7 @@ export class InspectorPanel {
 
       default: {
         triggerBar.innerHTML = `<div class="trigger-input-pill"><span>Tab: ${this.state.activeTab}</span></div>`;
-        body.innerHTML = `<div class="qursor-card"><div class="empty-state"><div class="empty-state-title">Tab Not Found</div></div></div>`;
+        body.innerHTML = `<div class="domlens-card"><div class="empty-state"><div class="empty-state-title">Tab Not Found</div></div></div>`;
         break;
       }
     }
@@ -1645,7 +1653,7 @@ export class InspectorPanel {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
-      console.error('[Qursor++] Download failed:', e);
+      console.error('[DOMLens] Download failed:', e);
     }
   }
 }

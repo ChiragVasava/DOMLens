@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Production-Grade React & Code Generator
+ * DOMLens - Production-Grade React & Code Generator
  *
  * Synthesizes valid, standalone, warning-free React JSX components from extracted DOM telemetry.
  * Supports HTML+CSS and React JSX (with Tailwind CSS + Scoped Styles).
@@ -534,7 +534,7 @@ export function validateAndRepairJsx(jsx) {
 // JSDoc + Props Helpers
 // ─────────────────────────────────────────────────────────────────
 function buildPropsJsdoc(data, twClasses) {
-  const lines = ['/**', ' * Auto-generated Standalone React Component by Qursor++'];
+  const lines = ['/**', ' * Auto-generated Standalone React Component by DOMLens'];
   if (data.tag)      lines.push(` * @origin  <${data.tag.toLowerCase()}>`);
   if (data.selector) lines.push(` * @selector ${data.selector}`);
   if (twClasses)     lines.push(` * @tailwind ${twClasses}`);

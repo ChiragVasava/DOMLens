@@ -2,7 +2,7 @@
 
 ## Step-by-Step Data Flow Architecture
 
-The data lifecycle within **Qursor++** operates across four discrete stages: Activation → Inspection & Hovering → Element Capture & Analysis → Telemetry Rendering & Clipboard Export.
+The data lifecycle within **DOMLens** operates across four discrete stages: Activation → Inspection & Hovering → Element Capture & Analysis → Telemetry Rendering & Clipboard Export.
 
 ---
 

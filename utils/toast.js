@@ -1,5 +1,5 @@
 /**
- * Qursor++ - Toast Notification Manager
+ * DOMLens - Toast Notification Manager
  * 
  * Lightweight notification manager providing smooth developer-grade action toasts.
  */

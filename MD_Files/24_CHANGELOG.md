@@ -1,6 +1,6 @@
-# Qursor++ — Release Changelog
+# DOMLens — Release Changelog
 
-All notable changes to **Qursor++** are documented in this file.
+All notable changes to **DOMLens** are documented in this file.
 
 ---
 
